@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application
+        android:name=".App"
+        android:label="StreamHub"
+        android:icon="@android:drawable/sym_def_app_icon"
+        android:theme="@style/Theme.StreamHub"
+        android:usesCleartextTraffic="true"
+        android:allowBackup="true">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".ui.DetailActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <activity
+            android:name=".ui.PlayerActivity"
+            android:theme="@style/Theme.StreamHub.Player"
+            android:configChanges="orientation|screenSize|keyboardHidden|layoutDirection" />
+
+        <activity
+            android:name=".ui.WebViewActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize" />
+    </application>
+</manifest>
