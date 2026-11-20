@@ -2,7 +2,16 @@
 
 CloudStream benzeri, tamamen kendi yazdığımız Android video uygulaması.
 
-## Özellikler (v1)
+> **⚠️ Yasal Uyarı / Disclaimer:** StreamHub hiçbir video, film veya dizi dosyasını
+> barındırmaz, depolamaz veya yüklemez; yalnızca üçüncü taraf sitelerde herkese açık
+> olan bağlantı ve bilgileri listeler. Tüm içerik hakları hak sahiplerine aittir.
+> Uygulama yalnızca kişisel ve eğitim amaçlıdır; yasalara aykırı kullanımdan
+> sorumluluk kullanıcıya aittir. Ayrıntılar: [DISCLAIMER.md](DISCLAIMER.md).
+> Uygulama ilk açılışta bu uyarıyı zorunlu bir diyalogla gösterir; "Kabul etmiyorum"
+> derseniz uygulama kapanır. Uyarı, ana ekrandaki "⚖ Yasal Uyarı" düğmesinden
+> her zaman görülebilir.
+
+## Özellikler (v1.1)
 - **Gömülü Dizilla sağlayıcısı** — dizilla.la: ana sayfa satırları, `/ara?q=` araması,
   dizi + bölüm listesi, NP/Pichive oynatıcı çözücü (`window.NP_CONFIG` → m3u8 +
   SHA-256 proof-of-work kapısı), ContentX ailesi yedekleri, sayfa içi m3u8 fallback
@@ -35,3 +44,4 @@ sağlayıcıların yanında ana sayfada listelenir.
 ## Yasal not
 Bu uygulama hiçbir video barındırmaz; yalnızca hedef sitelerin herkese açık
 sayfalarındaki bağlantıları kullanıcı için ayrıştırır. Kişisel kullanım içindir.
+Tam metin için [DISCLAIMER.md](DISCLAIMER.md) dosyasına bakın.

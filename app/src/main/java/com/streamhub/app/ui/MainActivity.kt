@@ -11,6 +11,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -32,6 +33,7 @@ class MainActivity : AppCompatActivity() {
 
     private val rows = mutableListOf<SectionRow>()
     private var searchJob: kotlinx.coroutines.Job? = null
+    private val prefs by lazy { getSharedPreferences("streamhub_prefs", MODE_PRIVATE) }
 
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -78,6 +80,13 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener { doSearch(searchInput.text.toString()) }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
         header.addView(searchRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        header.addView(TextView(this).apply {
+            text = "⚖ Yasal Uyarı (Disclaimer)"
+            setTextColor(Ui.TEXT_DIM)
+            textSize = 12f
+            setPadding(0, Ui.dp(this@MainActivity, 4), 0, 0)
+            setOnClickListener { showDisclaimerDialog(firstLaunch = false) }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(header)
 
         errorSlot = LinearLayout(this).apply {
@@ -112,6 +121,15 @@ class MainActivity : AppCompatActivity() {
 
         app.pluginError?.let { Ui.toast(this, it) }
 
+        // Yasal uyari: ilk acilista zorunlu onay
+        if (prefs.getBoolean("disclaimer_accepted", false)) {
+            startLoadingHome()
+        } else {
+            showDisclaimerDialog(firstLaunch = true)
+        }
+    }
+
+    private fun startLoadingHome() {
         val provider = app.providers.firstOrNull()
         if (provider == null) {
             showError("Yüklü sağlayıcı yok", allowWebView = false)
@@ -130,6 +148,28 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun showDisclaimerDialog(firstLaunch: Boolean) {
+        val message = """StreamHub hiçbir video, film veya dizi dosyasını barındırmaz, depolamaz veya yüklemez. Uygulama yalnızca üçüncü taraf internet sitelerinde herkese açık olarak yayınlanan bağlantı ve bilgileri cihazınızda listeler; tüm içerikler ilgili hak sahiplerine aittir.
+
+Uygulama kişisel ve eğitim amaçlı kullanım içindir. Ülkenizin telif yasalarına aykırı kullanımdan tüm sorumluluk kullanıcıya aittir. Hak sahibiyseniz kaldırma talebinizi içeriğin yayınlandığı kaynağa iletebilirsiniz.
+
+Devam ederek bu şartları kabul etmiş olursunuz."""
+        val builder = AlertDialog.Builder(this)
+            .setTitle("Yasal Uyarı — Devam Etmeden Önce Oku")
+            .setMessage(message)
+            .setCancelable(false)
+        if (firstLaunch) {
+            builder.setPositiveButton("Kabul ediyorum") { _, _ ->
+                prefs.edit().putBoolean("disclaimer_accepted", true).apply()
+                startLoadingHome()
+            }
+            builder.setNegativeButton("Kabul etmiyorum, çık") { _, _ -> finishAffinity() }
+        } else {
+            builder.setPositiveButton("Tamam", null)
+        }
+        builder.show()
     }
 
     private fun loadSection(index: Int) {
