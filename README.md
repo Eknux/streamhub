@@ -4,11 +4,14 @@ Eklenti tabanlı, Material 3 arayüzlü Android video oynatıcısı. **Hiçbir i
 
 > **⚠️ Yasal Uyarı:** StreamHub hiçbir video/film/dizi dosyasını barındırmaz, depolamaz veya yüklemez. Uygulama yalnızca bir oynatıcı + eklenti altyapısıdır; içeriği eklentiler üzerinden alan kullanıcının tüm sorumluluğu kendisine aittir. Tam metin: [DISCLAIMER.md](DISCLAIMER.md). Uygulama ilk açılışta bu uyarıyı zorunlu diyalogla gösterir; "Kabul etmiyorum" dersen kapanır.
 
-## Özellikler (v2.0)
+## Özellikler (v2.4)
 
 - **🔌 Derlemesiz eklenti sistemi** — zip içinde `plugin.json`; statik video listesi ya da CSS seçicileriyle site taraması; uygulama içinden ekle/kaldır
 - **🧩 Gömülü çözücüler** — NP_CONFIG (m3u8 + SHA-256 proof-of-work kapısı + altyazı), ContentX ailesi iframe'leri, sayfa içi m3u8/mp4 regex'leri — eklentiler otomatik kullanır
 - **🎬 ExoPlayer (Media3)** — HLS + MP4 + yerel dosya (content://), kaynak/quality seçici, altyazı desteği, **kaldığın yerden devam**
+- **📺 Resim içinde resim (PiP)** — ana ekrana basınca video küçük pencerede oynamaya devam eder (Android 8+); gerçek video oranı korunur
+- **⛶ Tam ekran** — yataya dönünce sistem çubukları otomatik gizlenir (immersive); tek dokunuşla aç/kapa
+- **🔄 Yön kilidi** — Oto / Dikey / Yatay seçimi oynatıcı üstünden tek dokunuşla
 - **⭐ Favoriler & 🕒 İzleme geçmişi** — cihazda saklanır
 - **▶ URL ile oynatma & 📁 yerel dosya oynatma** — eklentisiz de oynatıcı kullanılabilir
 - **🎨 Material 3** — koyu tema, bottom navigation, chip'ler, kartlar, snackbar'lar
@@ -58,6 +61,17 @@ app/src/main/java/com/streamhub/app/
 plugins/        Örnek eklenti (plugin.json + zip)
 ```
 
+## Atıf — CloudStream
+
+Bu projedeki bazı oynatıcı ve ağ özellikleri, **[CloudStream](https://github.com/recloudstream/cloudstream)** projesinden (recloudstream, **GPL-3.0** lisanslı) esinlenilmiş ve ondan uyarlanmıştır:
+
+- tek OkHttp ağ yığını (Cloudflare DoH + kalıcı çerezler + tek UA) — CloudStream'in tek noktadan ağ katmanı yaklaşımı
+- 429/5xx için uzayan pencerelerle otomatik yeniden deneme + alternatif kaynağa otomatik geçiş
+- Mali/Adreno GPU'larda codec uyumsuzluğunda alternatif decoder'a geçiş
+- kaynak/quality seçici ve kaldığın yerden devam davranışı
+
+CloudStream'e ve topluluğuna teşekkürler. GPL-3.0 uyumluluğu gereği StreamHub da **GPL-3.0** ile lisanslanmıştır: [LICENSE](LICENSE).
+
 ## Yasal
 
-Bu uygulama hiçbir video barındırmaz ve hiçbir siteyle bağlantılı değildir. Kişisel ve eğitim amaçlıdır. Ayrıntılar: [DISCLAIMER.md](DISCLAIMER.md).
+Bu uygulama hiçbir video barındırmaz ve hiçbir siteyle bağlantılı değildir. Kişisel ve eğitim amaçlıdır. Ayrıntılar: [DISCLAIMER.md](DISCLAIMER.md). Lisans: **GPL-3.0** ([LICENSE](LICENSE)).

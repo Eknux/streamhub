@@ -1,12 +1,20 @@
 package com.streamhub.app.ui
 
+import android.app.PictureInPictureParams
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.C
@@ -34,6 +42,12 @@ class PlayerActivity : AppCompatActivity() {
     private var resumed = false
     private var autoRetries = 0
     private lateinit var http: com.streamhub.app.net.Http
+
+    // Oynatici ekstra kontrolleri: yon kilidi, tam ekran, PiP
+    private var orientationMode = 0 // 0=oto (sensor), 1=dikey, 2=yatay
+    private var fullscreen = false
+    private var inPip = false
+    private var showingControls = true
 
     /** 429/5xx icin uzayan sessiz yeniden deneme pencereleri (Wikimedia Retry-After 600 sn verir). */
     private val autoRetryDelaysMs = longArrayOf(10_000L, 60_000L, 300_000L)
@@ -66,7 +80,7 @@ class PlayerActivity : AppCompatActivity() {
             gravity = Gravity.END
             setPadding(Ui.dp(this@PlayerActivity, 12), Ui.dp(this@PlayerActivity, 8), Ui.dp(this@PlayerActivity, 12), 0)
         }
-        addSourceButton()
+        addControls()
         frame.addView(overlay, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
 
         setContentView(frame)
@@ -84,15 +98,85 @@ class PlayerActivity : AppCompatActivity() {
         if (StreamSession.sources.size > 1) pickSource() else play(0)
     }
 
-    private fun addSourceButton() {
+    /** Ust kontrol satirlari: tam ekran + PiP + yon kilidi + kaynak secici.
+     *  Metin butonlari kullanilir (XML drawable yok — MIUI Resources$NotFoundException'tan kacinma). */
+    private fun addControls() {
+        showingControls = true
         overlay.removeAllViews()
-        overlay.addView(TextView(this).apply {
-            text = "⟳ Kaynaklar"
-            setTextColor(Ui.ACCENT)
-            textSize = 14f
-            setPadding(Ui.dp(this@PlayerActivity, 8), Ui.dp(this@PlayerActivity, 6), Ui.dp(this@PlayerActivity, 8), Ui.dp(this@PlayerActivity, 6))
-            setOnClickListener { pickSource() }
-        })
+        overlay.gravity = Gravity.END
+
+        val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row1.addView(controlButton(if (fullscreen) "⇔ Tam ekran çık" else "⛶ Tam ekran", fullscreen) { toggleFullscreen() })
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            row1.addView(controlButton("PiP", false) { enterPip() })
+        }
+        row1.addView(controlButton("⟳ Kaynaklar", false) { pickSource() })
+        overlay.addView(row1, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+        val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row2.addView(controlButton("Oto", orientationMode == 0) { applyOrientation(0) })
+        row2.addView(controlButton("Dikey", orientationMode == 1) { applyOrientation(1) })
+        row2.addView(controlButton("Yatay", orientationMode == 2) { applyOrientation(2) })
+        overlay.addView(row2, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    }
+
+    private fun controlButton(label: String, active: Boolean, onClick: () -> Unit) = TextView(this).apply {
+        text = label
+        setTextColor(if (active) Ui.ACCENT else Ui.TEXT_MAIN)
+        textSize = 14f
+        setPadding(Ui.dp(this@PlayerActivity, 10), Ui.dp(this@PlayerActivity, 6), Ui.dp(this@PlayerActivity, 10), Ui.dp(this@PlayerActivity, 6))
+        setOnClickListener { onClick() }
+    }
+
+    private fun toggleFullscreen() = setFullscreen(!fullscreen)
+
+    /** Tam ekran: sistem cubuklarini gizler (immersive), yatayda otomatik acilir. */
+    private fun setFullscreen(on: Boolean) {
+        fullscreen = on
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        if (on) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+        if (showingControls) addControls()
+    }
+
+    /** 0=oto (sensor), 1=dikey, 2=yatay (Cs tarzi kilit duzenine benzer). */
+    private fun applyOrientation(mode: Int) {
+        orientationMode = mode
+        requestedOrientation = when (mode) {
+            1 -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            2 -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+        }
+        if (showingControls) addControls()
+    }
+
+    /** Resim icinde resim: video oranini koruyarak ana ekrana donup kucuk pencerede oynatmayi surdurur. */
+    private fun enterPip() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            Ui.toast(this, "PiP için Android 8.0+ gerekli")
+            return
+        }
+        val p = player ?: return
+        try {
+            enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(pipRatio(p)).build())
+        } catch (e: Exception) {
+            Ui.toast(this, "PiP başlatılamadı: ${e.message}")
+        }
+    }
+
+    /** Video gercek boyutundan PiP orani hesaplar; Android'in [0.418, 2.39] sinirina kirpar. */
+    private fun pipRatio(p: ExoPlayer): Rational {
+        val v = p.videoSize
+        var r = if (v.width > 0 && v.height > 0) Rational(v.width, v.height) else Rational(16, 9)
+        val maxR = Rational(239, 100)
+        val minR = Rational(100, 239)
+        if (r > maxR) r = maxR
+        if (r < minR) r = minR
+        return r
     }
 
     private fun pickSource() {
@@ -219,14 +303,14 @@ class PlayerActivity : AppCompatActivity() {
     /** Hata/bekleme ekranini kapatip normal ust katmani geri koyar. */
     private fun resetOverlay() {
         runOnUiThread {
-            overlay.removeAllViews()
-            overlay.gravity = Gravity.END
-            addSourceButton()
+            overlay.visibility = View.VISIBLE
+            addControls()
         }
     }
 
     private fun showRetryStatus(code: Int?, attempt: Int, delayMs: Long) {
         runOnUiThread {
+            showingControls = false
             overlay.removeAllViews()
             overlay.gravity = Gravity.CENTER
             overlay.addView(TextView(this).apply {
@@ -245,6 +329,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun showErrorOverlay(message: String) {
         runOnUiThread {
+            showingControls = false
             overlay.removeAllViews()
             overlay.gravity = Gravity.CENTER
             overlay.addView(TextView(this).apply {
@@ -277,6 +362,34 @@ class PlayerActivity : AppCompatActivity() {
                     }
                 })
             }
+        }
+    }
+
+    /** Yataya donunce otomatik tam ekran (immersive), dikeyde cubuklar geri gelir. */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (inPip) return
+        setFullscreen(newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE)
+    }
+
+    /** PiP'e girince kontrolleri gizle, cikinca geri koy. */
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPip = isInPictureInPictureMode
+        playerView.useController = !isInPictureInPictureMode
+        if (isInPictureInPictureMode) {
+            overlay.visibility = View.GONE
+        } else {
+            overlay.visibility = View.VISIBLE
+            addControls()
+        }
+    }
+
+    /** Kullanici ana ekrana donerken video oynatiyorsa otomatik PiP'e gec (YouTube tarzi). */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (!inPip && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && player?.isPlaying == true) {
+            try { enterPip() } catch (_: Exception) {}
         }
     }
 

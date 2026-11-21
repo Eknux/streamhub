@@ -32,7 +32,8 @@
         <activity
             android:name=".ui.PlayerActivity"
             android:theme="@style/Theme.StreamHub.Player"
-            android:configChanges="orientation|screenSize|keyboardHidden|layoutDirection" />
+            android:supportsPictureInPicture="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|layoutDirection" />
 
         <activity
             android:name=".ui.WebViewActivity"
