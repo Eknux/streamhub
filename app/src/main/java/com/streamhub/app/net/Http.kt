@@ -3,7 +3,9 @@ package com.streamhub.app.net
 import android.content.Context
 import okhttp3.Cookie
 import okhttp3.CookieJar
+import okhttp3.Dns
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -23,7 +25,7 @@ class Http(context: Context) {
 
     companion object {
         const val UA =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
         private val CHALLENGE_MARKERS = listOf(
             "Just a moment", "One moment, please", "Attention Required",
             "Checking your browser", "cf-browser-verification", "Please wait while your request is being verified"
@@ -63,6 +65,33 @@ class Http(context: Context) {
         }
     }
 
+    /**
+     * Cs tarzi DNS: sorgular Cloudflare DoH uzerinden gider (ISP DNS blok/hijack'ine karsi).
+     * DoH kendisi erisilemezse sistem DNS'ine dusen guvenli sarmal.
+     */
+    private val doh: Dns by lazy {
+        val bootstrap = OkHttpClient.Builder()
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .build()
+        val cloudflare = okhttp3.dnsoverhttps.DnsOverHttps.Builder()
+            .client(bootstrap)
+            .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
+            .bootstrapDnsHosts(
+                java.net.InetAddress.getByName("1.1.1.1"),
+                java.net.InetAddress.getByName("1.0.0.1"),
+                java.net.InetAddress.getByName("2606:4700:4700::1111"),
+            )
+            .build()
+        object : Dns {
+            override fun lookup(hostname: String): List<java.net.InetAddress> =
+                try {
+                    cloudflare.lookup(hostname)
+                } catch (e: Exception) {
+                    Dns.SYSTEM.lookup(hostname)
+                }
+        }
+    }
+
     val client: OkHttpClient = OkHttpClient.Builder()
         .cookieJar(object : CookieJar {
             override fun loadForRequest(url: HttpUrl): List<Cookie> =
@@ -79,7 +108,9 @@ class Http(context: Context) {
                 persist()
             }
         })
+        .dns(doh)
         .followRedirects(true)
+        .followSslRedirects(true)
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(40, TimeUnit.SECONDS)
         .build()

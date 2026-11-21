@@ -18,8 +18,8 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.streamhub.app.core.Store
@@ -33,6 +33,10 @@ class PlayerActivity : AppCompatActivity() {
     private var lastSourceIndex = 0
     private var resumed = false
     private var autoRetries = 0
+    private lateinit var http: com.streamhub.app.net.Http
+
+    /** 429/5xx icin uzayan sessiz yeniden deneme pencereleri (Wikimedia Retry-After 600 sn verir). */
+    private val autoRetryDelaysMs = longArrayOf(10_000L, 60_000L, 300_000L)
     private var startMs = 0L
     private var epUrl = ""
     private var seriesUrl: String? = null
@@ -41,6 +45,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        http = com.streamhub.app.net.Http(this)
 
         titleText = intent.getStringExtra("title") ?: "StreamHub"
         startMs = intent.getLongExtra("startMs", 0L)
@@ -107,20 +112,21 @@ class PlayerActivity : AppCompatActivity() {
         val source = StreamSession.sources.getOrNull(index) ?: return
         lastSourceIndex = index
         autoRetries = 0
+        resetOverlay()
 
         val headers = buildMap {
             source.referer?.let { put("Referer", it) }
             for ((k, v) in source.headers) put(k, v)
             if (!containsKey("User-Agent")) put("User-Agent", com.streamhub.app.net.Http.UA)
         }
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(headers["User-Agent"] ?: com.streamhub.app.net.Http.UA)
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(20_000)
-            .setReadTimeoutMs(40_000)
-            .setDefaultRequestProperties(headers)
-        // content:// (yerel dosya) + file + http hepsini kapsar
-        val dataSourceFactory = DefaultDataSource.Factory(this, httpFactory)
+        // Cs mimarisi: oyatci dahil tum trafik tek OkHttp yigitindan gecer
+        // (ayni DoH + cerez havuzu + UA; site istekleriyle ayni kimlik)
+        val dataSourceFactory = DefaultDataSource.Factory(
+            this,
+            OkHttpDataSource.Factory(http.client)
+                .setUserAgent(headers["User-Agent"] ?: com.streamhub.app.net.Http.UA)
+                .setDefaultRequestProperties(headers)
+        )
 
         if (player == null) {
             // Mali/Adreno GPU'larinda codec uyumsuzlugunda alternatif decoder'a gecer
@@ -139,14 +145,24 @@ class PlayerActivity : AppCompatActivity() {
                         }
                         override fun onPlayerError(error: PlaybackException) {
                             val code = httpStatusCode(error)
-                            // 429 (hiz limiti) ve 5xx gecicidir — sessizce 2 kez yeniden dene
-                            if ((code == 429 || code in 500..599) && autoRetries < 2) {
-                                autoRetries++
-                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                    player?.prepare()
-                                    player?.playWhenReady = true
-                                }, 2500)
-                                return
+                            // 429 (hiz limiti) ve 5xx gecicidir: uzayan pencerelerle sessiz deneme
+                            if (code == 429 || code in 500..599) {
+                                if (autoRetries < autoRetryDelaysMs.size) {
+                                    val attempt = autoRetries + 1
+                                    val delay = autoRetryDelaysMs[autoRetries]
+                                    autoRetries = attempt
+                                    showRetryStatus(code, attempt, delay)
+                                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                        player?.prepare()
+                                        player?.playWhenReady = true
+                                    }, delay)
+                                    return
+                                }
+                                // denemeler bitti: alternatif kaynak varsa ona otomatik gec (Cs tarzi)
+                                if (StreamSession.sources.size > 1) {
+                                    play((lastSourceIndex + 1) % StreamSession.sources.size)
+                                    return
+                                }
                             }
                             val msg = when (code) {
                                 null -> "Oynatma hatası: ${error.errorCodeName}"
@@ -200,6 +216,33 @@ class PlayerActivity : AppCompatActivity() {
         return null
     }
 
+    /** Hata/bekleme ekranini kapatip normal ust katmani geri koyar. */
+    private fun resetOverlay() {
+        runOnUiThread {
+            overlay.removeAllViews()
+            overlay.gravity = Gravity.END
+            addSourceButton()
+        }
+    }
+
+    private fun showRetryStatus(code: Int?, attempt: Int, delayMs: Long) {
+        runOnUiThread {
+            overlay.removeAllViews()
+            overlay.gravity = Gravity.CENTER
+            overlay.addView(TextView(this).apply {
+                text = if (code == 429) {
+                    "Kaynak sunucusu hız limiti (HTTP 429)\n${delayMs / 1000} sn sonra otomatik tekrar (deneme $attempt/3)…"
+                } else {
+                    "Geçici ağ hatası (HTTP $code)\n${delayMs / 1000} sn sonra otomatik tekrar (deneme $attempt/3)…"
+                }
+                setTextColor(Ui.ACCENT)
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(Ui.dp(this@PlayerActivity, 24), 0, Ui.dp(this@PlayerActivity, 24), 0)
+            })
+        }
+    }
+
     private fun showErrorOverlay(message: String) {
         runOnUiThread {
             overlay.removeAllViews()
@@ -218,11 +261,22 @@ class PlayerActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER
                 setPadding(0, Ui.dp(this@PlayerActivity, 12), 0, 0)
                 setOnClickListener {
-                    this@PlayerActivity.overlay.removeAllViews()
-                    addSourceButton()
-                    player?.apply { prepare(); playWhenReady = true }
+                    this@PlayerActivity.player?.apply { prepare(); playWhenReady = true }
                 }
             })
+            if (StreamSession.sources.size > 1) {
+                overlay.addView(TextView(this).apply {
+                    text = "⟳ Başka kaynak seç"
+                    setTextColor(Ui.ACCENT)
+                    textSize = 15f
+                    gravity = Gravity.CENTER
+                    setPadding(0, Ui.dp(this@PlayerActivity, 8), 0, 0)
+                    setOnClickListener {
+                        this@PlayerActivity.resetOverlay()
+                        this@PlayerActivity.pickSource()
+                    }
+                })
+            }
         }
     }
 
