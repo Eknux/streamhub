@@ -44,7 +44,7 @@ class WebViewActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         val saveBtn = TextView(this).apply {
-            text = "✓ Çerezleri Kaydet ve Dön"
+            text = com.streamhub.app.core.I18n.s("cookies_save")
             setTextColor(Ui.ACCENT)
             textSize = 16f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
@@ -56,10 +56,10 @@ class WebViewActivity : AppCompatActivity() {
                 val raw = CookieManager.getInstance().getCookie(url)
                 if (host != null && raw != null) {
                     app.http.importCookies(host, raw)
-                    Ui.toast(this@WebViewActivity, "Çerezler kaydedildi — geri dönüp tekrar dene")
+                    Ui.toast(this@WebViewActivity, com.streamhub.app.core.I18n.s("cookies_saved"))
                     finish()
                 } else {
-                    Ui.toast(this@WebViewActivity, "Çerez okunamadı; sayfa tamamen açıldıktan sonra tekrar bas")
+                    Ui.toast(this@WebViewActivity, com.streamhub.app.core.I18n.s("cookies_failed"))
                 }
             }
         }
@@ -67,7 +67,7 @@ class WebViewActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         root.addView(TextView(this).apply {
-            text = "Koruma ekranı görürsen 5–10 sn bekle; sayfa açılınca üstteki düğmeye bas."
+            text = com.streamhub.app.core.I18n.s("webview_hint")
             setTextColor(Ui.TEXT_DIM)
             textSize = 12f
             setPadding(Ui.dp(this@WebViewActivity, 12), 0, Ui.dp(this@WebViewActivity, 12), Ui.dp(this@WebViewActivity, 8))

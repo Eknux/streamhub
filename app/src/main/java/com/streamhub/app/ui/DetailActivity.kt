@@ -102,7 +102,7 @@ class DetailActivity : AppCompatActivity() {
             topMargin = Ui.dp(this@DetailActivity, 12)
         })
 
-        root.addView(Ui.sectionTitle(this, "Bölümler"))
+        root.addView(Ui.sectionTitle(this, com.streamhub.app.core.I18n.s("episodes")))
         progress = ProgressBar(this)
         root.addView(progress, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
         errorSlot = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -118,14 +118,14 @@ class DetailActivity : AppCompatActivity() {
     private suspend fun load() {
         val provider = app.providerByName(providerName)
         if (provider == null) {
-            showError("Eklenti bulunamadı — Ayarlar'dan eklenti yükle", allowWebView = false)
+            showError(com.streamhub.app.core.I18n.s("plugin_not_found"), allowWebView = false)
             runOnUiThread { showProgress(false) }
             return
         }
         try {
             val loaded = provider.load(url)
             if (loaded == null) {
-                showError("İçerik yüklenemedi", allowWebView = true)
+                showError(com.streamhub.app.core.I18n.s("load_failed"), allowWebView = true)
                 runOnUiThread { showProgress(false) }
                 return
             }
@@ -140,11 +140,11 @@ class DetailActivity : AppCompatActivity() {
                 updateFavIcon()
                 episodeList.adapter = EpisodeAdapter(loaded.episodes) { i -> openPlayer(provider, loaded.episodes[i]) }
                 if (loaded.episodes.isEmpty()) {
-                    Snackbar.make(episodeList, "Bölüm bulunamadı — eklentinin episodeSelector kurallarını kontrol et", Snackbar.LENGTH_LONG).show()
+                    Snackbar.make(episodeList, com.streamhub.app.core.I18n.s("no_episodes"), Snackbar.LENGTH_LONG).show()
                 }
             }
         } catch (e: ChallengeException) {
-            showError(e.message ?: "Bot koruması", allowWebView = true, challengeUrl = e.pageUrl)
+            showError(e.message ?: com.streamhub.app.core.I18n.s("bot_protection_tap").substringBefore(" —"), allowWebView = true, challengeUrl = e.pageUrl)
         } catch (e: Exception) {
             showError(e.message ?: e.javaClass.simpleName, allowWebView = false,
                 retry = { lifecycleScope.launch { load() } })
@@ -157,17 +157,18 @@ class DetailActivity : AppCompatActivity() {
         if (loadingLinks) return
         loadingLinks = true
         showProgress(true)
-        Snackbar.make(episodeList, "Kaynaklar çözülüyor...", Snackbar.LENGTH_SHORT).show()
+        Snackbar.make(episodeList, com.streamhub.app.core.I18n.s("resolving"), Snackbar.LENGTH_SHORT).show()
         lifecycleScope.launch {
             try {
                 val sources = provider.loadLinks(ep.url)
                 if (sources.isEmpty()) {
-                    Ui.toast(this@DetailActivity, "Video kaynağı bulunamadı — eklentinin player kuralları eksik olabilir")
+                    Ui.toast(this@DetailActivity, com.streamhub.app.core.I18n.s("no_video_source"))
                 } else {
                     StreamSession.sources = sources
+                    val epTitle = ep.title ?: com.streamhub.app.core.I18n.f("episode_n", "${ep.number ?: 1}")
                     startActivity(
                         Intent(this@DetailActivity, PlayerActivity::class.java)
-                            .putExtra("title", "$seriesTitle — ${ep.title ?: "Bölüm " + (ep.number ?: 1)}")
+                            .putExtra("title", "$seriesTitle — $epTitle")
                             .putExtra("seriesUrl", url)
                             .putExtra("episodeUrl", ep.url)
                             .putExtra("poster", posterUrl)
@@ -175,9 +176,9 @@ class DetailActivity : AppCompatActivity() {
                     )
                 }
             } catch (e: ChallengeException) {
-                showError(e.message ?: "Bot koruması", allowWebView = true, challengeUrl = e.pageUrl)
+                showError(e.message ?: com.streamhub.app.core.I18n.s("bot_protection_tap").substringBefore(" —"), allowWebView = true, challengeUrl = e.pageUrl)
             } catch (e: Exception) {
-                Ui.toast(this@DetailActivity, "Kaynak hatası: ${e.message ?: e.javaClass.simpleName}")
+                Ui.toast(this@DetailActivity, com.streamhub.app.core.I18n.f("source_error", e.message ?: e.javaClass.simpleName))
             } finally {
                 loadingLinks = false
                 runOnUiThread { showProgress(false) }
@@ -190,7 +191,9 @@ class DetailActivity : AppCompatActivity() {
             Store.FavItem(seriesTitle, url, posterUrl, providerName ?: "", false, System.currentTimeMillis())
         )
         updateFavIcon()
-        Snackbar.make(episodeList, if (added) "⭐ Favorilere eklendi" else "Favorilerden çıkarıldı", Snackbar.LENGTH_SHORT).show()
+        Snackbar.make(episodeList,
+            if (added) com.streamhub.app.core.I18n.s("fav_added") else com.streamhub.app.core.I18n.s("fav_removed"),
+            Snackbar.LENGTH_SHORT).show()
     }
 
     private fun updateFavIcon() {

@@ -58,6 +58,7 @@ class App : Application() {
         // Material You: Android 12+ duvar kagidi paleti tum aktivitelere uygulanir
         runCatching { DynamicColors.applyToActivitiesIfAvailable(this) }
         runCatching { Store.init(this) }
+        runCatching { com.streamhub.app.core.I18n.init(this) }
         http = Http(this)
         // eklenti klasoru/zip hatalari uygulamayi asla kapatmamali
         runCatching { reloadPlugins() }.onFailure { CrashHandler.record(it) }

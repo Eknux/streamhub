@@ -86,7 +86,7 @@ class MainActivity : AppCompatActivity() {
             // ve hatanin kendisi ekranda gosterilir ("direk cokuyor" degil).
             CrashHandler.record(t)
             runCatching { setContentView(buildFallbackUi(t)) }
-            runCatching { Ui.toast(this, "Arayüz kurulamadı — hata ekranda gösterildi") }
+            runCatching { Ui.toast(this, com.streamhub.app.core.I18n.s("ui_failed")) }
         }
         runCatching { maybeShowCrashReport() }
     }
@@ -103,7 +103,7 @@ class MainActivity : AppCompatActivity() {
 
         val toolbar = MaterialToolbar(this).apply {
             title = "StreamHub"
-            subtitle = "Eklenti tabanlı video oynatıcı"
+            subtitle = com.streamhub.app.core.I18n.s("toolbar_subtitle")
             setTitleTextColor(Ui.TEXT_MAIN)
             setSubtitleTextColor(Ui.TEXT_DIM)
         }
@@ -126,10 +126,10 @@ class MainActivity : AppCompatActivity() {
         root.addView(contentFrame, LinearLayout.LayoutParams(-1, 0, 1f))
 
         val nav = BottomNavigationView(this).apply { id = R.id.bottom_nav }
-        nav.menu.add(Menu.NONE, PAGE_HOME, Menu.NONE, "Ana").setIcon(R.drawable.ic_home)
-        nav.menu.add(Menu.NONE, PAGE_SEARCH, Menu.NONE, "Arama").setIcon(R.drawable.ic_search)
-        nav.menu.add(Menu.NONE, PAGE_FAVS, Menu.NONE, "Favoriler").setIcon(R.drawable.ic_fav)
-        nav.menu.add(Menu.NONE, PAGE_SETTINGS, Menu.NONE, "Ayarlar").setIcon(R.drawable.ic_settings)
+        nav.menu.add(Menu.NONE, PAGE_HOME, Menu.NONE, com.streamhub.app.core.I18n.s("nav_home")).setIcon(R.drawable.ic_home)
+        nav.menu.add(Menu.NONE, PAGE_SEARCH, Menu.NONE, com.streamhub.app.core.I18n.s("nav_search")).setIcon(R.drawable.ic_search)
+        nav.menu.add(Menu.NONE, PAGE_FAVS, Menu.NONE, com.streamhub.app.core.I18n.s("nav_favs")).setIcon(R.drawable.ic_fav)
+        nav.menu.add(Menu.NONE, PAGE_SETTINGS, Menu.NONE, com.streamhub.app.core.I18n.s("nav_settings")).setIcon(R.drawable.ic_settings)
         nav.labelVisibilityMode = BottomNavigationView.LABEL_VISIBILITY_LABELED
         nav.setOnItemSelectedListener { item ->
             showPage(item.itemId); true
@@ -155,13 +155,13 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(16), dp(16), dp(16), dp(16))
         }
         root.addView(TextView(ctx).apply {
-            text = "StreamHub başlatılamadı"
+            text = com.streamhub.app.core.I18n.s("ui_failed_title")
             setTextColor(0xFFFFFFFF.toInt())
             textSize = 18f
             setTypeface(typeface, Typeface.BOLD)
         })
         root.addView(TextView(ctx).apply {
-            text = "Arayüz kurulamadı. Aşağıdaki hatayı ekrandan seçip kopyala ve geliştiriciye gönder:"
+            text = com.streamhub.app.core.I18n.s("ui_failed_msg")
             setTextColor(0xFF9aa3b5.toInt())
             textSize = 13f
             setPadding(0, dp(8), 0, dp(8))
@@ -176,17 +176,17 @@ class MainActivity : AppCompatActivity() {
         })
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(TextView(ctx).apply {
-            text = "📋 Hatayı Kopyala"
+            text = com.streamhub.app.core.I18n.s("copy_error")
             setTextColor(0xFF8b9dff.toInt())
             textSize = 15f
-            setTypeface(typeface, Typeface.BOLD)
+            setTypeface(Typeface.BOLD)
             gravity = Gravity.CENTER
             setPadding(0, dp(12), 0, 0)
             setOnClickListener {
                 val full = t.toString() + "\n" + t.stackTrace.joinToString("\n") { it.toString() }
                 (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                     .setPrimaryClip(ClipData.newPlainText("streamhub_error", full))
-                Ui.toast(ctx, "Kopyalandı")
+                Ui.toast(ctx, com.streamhub.app.core.I18n.s("copied"))
             }
         })
         return root
@@ -200,15 +200,15 @@ class MainActivity : AppCompatActivity() {
         val mark = { prefs.edit().putLong("crash_shown_at", stamp).apply() }
         // framework diyaloğu: AppCompat/M3 bozulsa bile calisir
         android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Son çökme kaydı")
+            .setTitle(com.streamhub.app.core.I18n.s("crash_dialog_title"))
             .setMessage(crash.take(3500))
-            .setPositiveButton("📋 Kopyala") { _, _ ->
+            .setPositiveButton(com.streamhub.app.core.I18n.s("copy_emoji")) { _, _ ->
                 (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                     .setPrimaryClip(ClipData.newPlainText("streamhub_crash", crash))
                 mark()
             }
-            .setNeutralButton("🗑 Sil") { _, _ -> CrashHandler.clear(this); mark() }
-            .setNegativeButton("Kapat") { _, _ -> mark() }
+            .setNeutralButton(com.streamhub.app.core.I18n.s("delete")) { _, _ -> CrashHandler.clear(this); mark() }
+            .setNegativeButton(com.streamhub.app.core.I18n.s("close")) { _, _ -> mark() }
             .show()
     }
 
@@ -277,12 +277,12 @@ class MainActivity : AppCompatActivity() {
         // hizli eylemler
         val actions = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), 0) }
         actions.addView(MaterialButton(ctx).apply {
-            text = "▶ URL ile Oynat"
+            text = com.streamhub.app.core.I18n.s("url_play")
             setPadding(Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12), 0)
             setOnClickListener { urlPlayDialog() }
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(4, 0, 4, 0) })
         actions.addView(MaterialButton(ctx).apply {
-            text = "⟳ Yerel Dosya"
+            text = com.streamhub.app.core.I18n.s("local_file")
             setPadding(Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12), 0)
             setOnClickListener { videoPicker?.launch(arrayOf("video/*")) }
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(4, 0, 4, 0) })
@@ -291,7 +291,7 @@ class MainActivity : AppCompatActivity() {
         // izlemeye devam et
         val history = Store.history()
         if (history.isNotEmpty()) {
-            col.addView(Ui.sectionTitle(ctx, "Izlemeye Devam Et"))
+            col.addView(Ui.sectionTitle(ctx, com.streamhub.app.core.I18n.s("continue_watching")))
             val rv = RecyclerView(ctx).apply {
                 layoutManager = LinearLayoutManager(ctx, LinearLayoutManager.HORIZONTAL, false)
             }
@@ -328,21 +328,21 @@ class MainActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 try {
                     val items = provider.section(sec)
-                    if (items.isEmpty()) {
-                        err.text = "· İçerik bulunamadı"
-                        err.visibility = View.VISIBLE
-                    } else {
-                        inner.adapter = CardAdapter(items, { openResult(it) }, lifecycleScope, app.http)
-                    }
-                } catch (e: ChallengeException) {
-                    showRowError(err, "Bot koruması — dokun: WebView ile aç") {
-                        startActivity(Intent(this@MainActivity, WebViewActivity::class.java).putExtra("url", e.pageUrl))
-                    }
-                } catch (e: Exception) {
-                    showRowError(err, "Hata: ${e.message ?: e.javaClass.simpleName} — dokun: yeniden dene") {
-                        refreshHome()
-                    }
+                if (items.isEmpty()) {
+                    err.text = com.streamhub.app.core.I18n.s("no_content")
+                    err.visibility = View.VISIBLE
+                } else {
+                    inner.adapter = CardAdapter(items, { openResult(it) }, lifecycleScope, app.http)
                 }
+            } catch (e: ChallengeException) {
+                showRowError(err, com.streamhub.app.core.I18n.s("bot_protection_tap")) {
+                    startActivity(Intent(this@MainActivity, WebViewActivity::class.java).putExtra("url", e.pageUrl))
+                }
+            } catch (e: Exception) {
+                showRowError(err, com.streamhub.app.core.I18n.f("error_tap_retry", e.message ?: e.javaClass.simpleName)) {
+                    refreshHome()
+                }
+            }
             }
         }
         return col
@@ -365,27 +365,27 @@ class MainActivity : AppCompatActivity() {
             setPadding(Ui.dp(ctx, 20), Ui.dp(ctx, 20), Ui.dp(ctx, 20), Ui.dp(ctx, 20))
         }
         inner.addView(TextView(ctx).apply {
-            text = "🔌 Eklenti kurulu değil"
+            text = com.streamhub.app.core.I18n.s("no_plugin_title")
             setTextColor(Ui.TEXT_MAIN)
             textSize = 18f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
         inner.addView(TextView(ctx).apply {
-            text = "StreamHub sadece bir oynatıcıdır — kaynak eklemek için eklenti kur. Eklenti, içinde plugin.json olan bir .zip dosyasıdır; derleme gerekmez, eklediğin an çalışır."
+            text = com.streamhub.app.core.I18n.s("no_plugin_msg")
             setTextColor(Ui.TEXT_DIM)
             textSize = 13f
             setPadding(0, Ui.dp(ctx, 10), 0, Ui.dp(ctx, 16))
         })
         inner.addView(MaterialButton(ctx).apply {
-            text = "＋ Eklenti Ekle (.zip)"
+            text = com.streamhub.app.core.I18n.s("add_plugin")
             setOnClickListener { pluginPicker?.launch(arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed")) }
         }, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 0, 0, Ui.dp(ctx, 10)) })
         inner.addView(MaterialButton(ctx).apply {
-            text = "📖 Eklenti Yapımı (GitHub)"
+            text = com.streamhub.app.core.I18n.s("plugins_doc_github")
             setOnClickListener { openUrl(PLUGINS_DOC_URL) }
         }, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 0, 0, Ui.dp(ctx, 10)) })
         inner.addView(MaterialButton(ctx).apply {
-            text = "▶ URL ile Oynat"
+            text = com.streamhub.app.core.I18n.s("url_play")
             setOnClickListener { urlPlayDialog() }
         }, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
         card.addView(inner)
@@ -401,7 +401,7 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 12))
         }
-        val field = TextInputLayout(ctx).apply { hint = "Eklentide ara..." }
+        val field = TextInputLayout(ctx).apply { hint = com.streamhub.app.core.I18n.s("search_hint") }
         val input = TextInputEditText(ctx).apply {
             setSingleLine(true)
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
@@ -412,7 +412,7 @@ class MainActivity : AppCompatActivity() {
         val results = RecyclerView(ctx).apply { layoutManager = LinearLayoutManager(ctx) }
         page.addView(results, LinearLayout.LayoutParams(-1, 0, 1f))
         val empty = TextView(ctx).apply {
-            text = "Yukarıya yaz ve ara. Arama, seçili eklentinin arama kurallarını kullanır."
+            text = com.streamhub.app.core.I18n.s("search_empty_hint")
             setTextColor(Ui.TEXT_DIM)
             textSize = 13f
             setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 16), Ui.dp(ctx, 8), 0)
@@ -424,7 +424,7 @@ class MainActivity : AppCompatActivity() {
             val provider = app.providerByName(app.activeProviderName)
             if (q.isBlank()) return
             if (provider == null) {
-                Ui.toast(ctx, "Önce bir eklenti kur"); return
+                Ui.toast(ctx, com.streamhub.app.core.I18n.s("need_plugin_first")); return
             }
             empty.visibility = View.GONE
             searchJob?.cancel()
@@ -433,11 +433,11 @@ class MainActivity : AppCompatActivity() {
                     val found = provider.search(q)
                     results.adapter = SearchAdapter(found, { openResult(it) }, lifecycleScope, app.http)
                     if (found.isEmpty()) {
-                        empty.text = "Sonuç bulunamadı: $q"
+                        empty.text = com.streamhub.app.core.I18n.f("no_results", q)
                         empty.visibility = View.VISIBLE
                     }
                 } catch (e: ChallengeException) {
-                    showErrorPage(empty, e.message ?: "Bot koruması")
+                    showErrorPage(empty, e.message ?: com.streamhub.app.core.I18n.s("bot_protection_tap").substringBefore(" —"))
                 } catch (e: Exception) {
                     showErrorPage(empty, e.message ?: e.javaClass.simpleName)
                 }
@@ -453,7 +453,7 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetTextI18n")
     private fun showErrorPage(view: TextView, message: String) {
-        view.text = "Hata: $message"
+        view.text = com.streamhub.app.core.I18n.s("error_prefix") + " $message"
         view.setTextColor(Ui.ERROR_RED)
         view.visibility = View.VISIBLE
     }
@@ -465,7 +465,7 @@ class MainActivity : AppCompatActivity() {
         val favs = Store.favorites()
         if (favs.isEmpty()) {
             val t = TextView(this).apply {
-                text = "⭐ Favori yok\n\nDetay ekranındaki yıldıza dokunarak dizi/video ekle."
+                text = com.streamhub.app.core.I18n.s("favs_empty")
                 setTextColor(Ui.TEXT_DIM)
                 textSize = 14f
                 setPadding(Ui.dp(this@MainActivity, 16), Ui.dp(this@MainActivity, 16), Ui.dp(this@MainActivity, 16), 0)
@@ -510,55 +510,56 @@ class MainActivity : AppCompatActivity() {
         val ctx = this
         val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(0, Ui.dp(ctx, 4), 0, Ui.dp(ctx, 32)) }
 
-        col.addView(Ui.sectionTitle(ctx, "Eklentiler"))
+        col.addView(Ui.sectionTitle(ctx, com.streamhub.app.core.I18n.s("section_plugins")))
         val installed = com.streamhub.app.core.PluginManager.installed(ctx)
         if (installed.isEmpty()) {
-            col.addView(listSubtitle("Kurulu eklenti yok. \"Eklenti Ekle\" ile zip yükle."))
+            col.addView(listSubtitle(com.streamhub.app.core.I18n.s("no_plugins_installed")))
         }
         installed.forEach { f ->
             col.addView(settingsRow(null, f.name, "${f.length() / 1024} KB") { })
-            col.addView(iconRow(R.drawable.ic_delete, "Kaldır") {
+            col.addView(iconRow(R.drawable.ic_delete, com.streamhub.app.core.I18n.s("remove")) {
                 com.streamhub.app.core.PluginManager.delete(ctx, f.name)
                 app.reloadPlugins()
                 refreshSettings(); refreshHome()
-                snack("Eklenti kaldırıldı")
+                snack(com.streamhub.app.core.I18n.s("plugin_removed"))
             })
             col.addView(Ui.divider(ctx))
         }
-        col.addView(iconRow(R.drawable.ic_add, "Eklenti Ekle (.zip)") {
+        col.addView(iconRow(R.drawable.ic_add, com.streamhub.app.core.I18n.s("add_plugin")) {
             pluginPicker?.launch(arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed"))
         })
-        col.addView(iconRow(R.drawable.ic_book, "Eklenti Yapımı Rehberi (GitHub)") { openUrl(PLUGINS_DOC_URL) })
+        col.addView(iconRow(R.drawable.ic_book, com.streamhub.app.core.I18n.s("plugins_doc_guide")) { openUrl(PLUGINS_DOC_URL) })
         col.addView(Ui.divider(ctx))
 
-        col.addView(Ui.sectionTitle(ctx, "Veriler"))
-        col.addView(iconRow(R.drawable.ic_delete, "İzleme Geçmişini Temizle") {
-            Store.clearHistory(); refreshHome(); snack("Geçmiş temizlendi")
+        col.addView(Ui.sectionTitle(ctx, com.streamhub.app.core.I18n.s("section_data")))
+        col.addView(iconRow(R.drawable.ic_delete, com.streamhub.app.core.I18n.s("clear_history")) {
+            Store.clearHistory(); refreshHome(); snack(com.streamhub.app.core.I18n.s("history_cleared"))
         })
-        col.addView(iconRow(R.drawable.ic_delete, "Favorileri Temizle") {
-            Store.clearFavorites(); snack("Favoriler temizlendi")
+        col.addView(iconRow(R.drawable.ic_delete, com.streamhub.app.core.I18n.s("clear_favs")) {
+            Store.clearFavorites(); snack(com.streamhub.app.core.I18n.s("favs_cleared"))
         })
         col.addView(Ui.divider(ctx))
 
-        col.addView(Ui.sectionTitle(ctx, "Hakkında"))
-        col.addView(iconRow(R.drawable.ic_fav, "⚖ Yasal Uyarı") { showDisclaimerDialog(false) })
+        col.addView(Ui.sectionTitle(ctx, com.streamhub.app.core.I18n.s("section_about")))
+        col.addView(iconRow(R.drawable.ic_globe, com.streamhub.app.core.I18n.s("language_row")) { showLanguageDialog() })
+        col.addView(iconRow(R.drawable.ic_fav, com.streamhub.app.core.I18n.s("legal_notice")) { showDisclaimerDialog(false) })
         val crash = CrashHandler.lastCrash(ctx)
         if (crash != null) {
-            col.addView(iconRow(R.drawable.ic_bug, "🐞 Son Çökme Kaydı") {
+            col.addView(iconRow(R.drawable.ic_bug, com.streamhub.app.core.I18n.s("crash_row")) {
                 AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Son çökme kaydı")
+                    .setTitle(com.streamhub.app.core.I18n.s("crash_dialog_title"))
                     .setMessage(crash.take(3000))
-                    .setPositiveButton("Kopyala") { _, _ ->
+                    .setPositiveButton(com.streamhub.app.core.I18n.s("copy")) { _, _ ->
                         (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                             .setPrimaryClip(ClipData.newPlainText("crash", crash))
-                        snack("Kopyalandı")
+                        snack(com.streamhub.app.core.I18n.s("copied"))
                     }
-                    .setNeutralButton("Sil") { _, _ -> CrashHandler.clear(ctx); refreshSettings() }
-                    .setNegativeButton("Kapat", null)
+                    .setNeutralButton(com.streamhub.app.core.I18n.s("delete")) { _, _ -> CrashHandler.clear(ctx); refreshSettings() }
+                    .setNegativeButton(com.streamhub.app.core.I18n.s("close"), null)
                     .show()
             })
         }
-        col.addView(listSubtitle("StreamHub v2.3 — Material You\n github.com/Eknux/streamhub"))
+        col.addView(listSubtitle(com.streamhub.app.core.I18n.s("version_footer")))
 
         pageSettings.addView(col)
     }
@@ -615,27 +616,27 @@ class MainActivity : AppCompatActivity() {
                 app.reloadPlugins()
                 refreshHome()
                 snack(
-                    if (app.pluginErrors.isEmpty()) "Eklenti eklendi: $name (${app.providers.size} kaynak yüklü)"
-                    else "Eklenti yüklendi ama hata var: ${app.pluginErrors.joinToString("; ").take(120)}"
+                    if (app.pluginErrors.isEmpty()) com.streamhub.app.core.I18n.f("plugin_added", name, "${app.providers.size}")
+                    else com.streamhub.app.core.I18n.f("plugin_added_with_errors", app.pluginErrors.joinToString("; ").take(120))
                 )
             }
-            .onFailure { Ui.toast(this, "Eklenti eklenemedi: ${it.message}") }
+            .onFailure { Ui.toast(this, com.streamhub.app.core.I18n.f("plugin_add_failed", it.message ?: "")) }
     }
 
     private fun urlPlayDialog() {
         val ctx = this
-        val field = TextInputLayout(ctx).apply { hint = "Video bağlantısı (m3u8 / mp4)" }
+        val field = TextInputLayout(ctx).apply { hint = com.streamhub.app.core.I18n.s("url_hint") }
         val input = TextInputEditText(ctx).apply { setSingleLine(true) }
         field.addView(input, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
         AlertDialog.Builder(ctx)
-            .setTitle("URL ile Oynat")
+            .setTitle(com.streamhub.app.core.I18n.s("url_dialog_title"))
             .setView(field)
-            .setPositiveButton("Oynat") { _, _ ->
+            .setPositiveButton(com.streamhub.app.core.I18n.s("play")) { _, _ ->
                 val url = input.text.toString().trim()
                 if (url.startsWith("http")) playDirect(url, url.substringAfterLast('/'), null, null)
-                else Ui.toast(ctx, "Geçersiz bağlantı")
+                else Ui.toast(ctx, com.streamhub.app.core.I18n.s("invalid_url"))
             }
-            .setNegativeButton("İptal", null)
+            .setNegativeButton(com.streamhub.app.core.I18n.s("cancel"), null)
             .show()
     }
 
@@ -643,8 +644,8 @@ class MainActivity : AppCompatActivity() {
         runCatching {
             contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        val name = uri.lastPathSegment?.substringAfterLast('/') ?: "Yerel video"
-        StreamSession.sources = listOf(VideoSource(name = "Yerel dosya", url = uri.toString(), isM3u8 = false))
+        val name = uri.lastPathSegment?.substringAfterLast('/') ?: com.streamhub.app.core.I18n.s("local_video")
+        StreamSession.sources = listOf(VideoSource(name = com.streamhub.app.core.I18n.s("local_file_source"), url = uri.toString(), isM3u8 = false))
         startActivity(
             Intent(this, PlayerActivity::class.java)
                 .putExtra("title", name)
@@ -696,33 +697,49 @@ class MainActivity : AppCompatActivity() {
 
     private fun openUrl(url: String) {
         runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-            .onFailure { Ui.toast(this, "Tarayıcı açılamadı") }
+            .onFailure { Ui.toast(this, com.streamhub.app.core.I18n.s("browser_failed")) }
     }
 
     private fun snack(message: String) =
         Snackbar.make(contentFrame, message, Snackbar.LENGTH_SHORT).show()
 
-    // ---------- disclaimer ----------
+    // ---------- disclaimer + dil secimi ----------
 
     private fun showDisclaimerDialog(firstLaunch: Boolean) {
-        val message = """StreamHub hiçbir video, film veya dizi dosyasını barındırmaz, depolamaz veya yüklemez. Uygulama yalnızca bir oynatıcı ve eklenti altyapısıdır; içeriği eklentiler üzerinden üçüncü taraf sitelerden alan kullanıcıdır ve tüm sorumluluk kullanıcıya aittir.
-
-Uygulama kişisel ve eğitim amaçlı kullanım içindir. Ülkenizin telif yasalarına aykırı kullanımdan tüm sorumluluk kullanıcıya aittir. Hak sahibiyseniz kaldırma talebinizi içeriğin yayınlandığı kaynağa iletebilirsiniz.
-
-Devam ederek bu şartları kabul etmiş olursunuz."""
         val builder = AlertDialog.Builder(this)
-            .setTitle("Yasal Uyarı — Devam Etmeden Önce Oku")
-            .setMessage(message)
+            .setTitle(com.streamhub.app.core.I18n.s("disclaimer_title"))
+            .setMessage(com.streamhub.app.core.I18n.s("disclaimer_msg"))
             .setCancelable(false)
         if (firstLaunch) {
-            builder.setPositiveButton("Kabul ediyorum") { _, _ ->
+            builder.setPositiveButton(com.streamhub.app.core.I18n.s("disclaimer_accept")) { _, _ ->
                 prefs.edit().putBoolean("disclaimer_accepted", true).apply()
+                // yasal uyari kabulunden sonra dil secilir
+                runCatching { showLanguageDialog() }
             }
-            builder.setNegativeButton("Kabul etmiyorum, çık") { _, _ -> finishAffinity() }
+            builder.setNegativeButton(com.streamhub.app.core.I18n.s("disclaimer_decline")) { _, _ -> finishAffinity() }
         } else {
-            builder.setPositiveButton("Tamam", null)
+            builder.setPositiveButton(com.streamhub.app.core.I18n.s("ok"), null)
         }
         builder.show()
+    }
+
+    /** Dil secici: Turkce / English. Secim kalici kaydedilir ve arayuz yeniden kurulur. */
+    private fun showLanguageDialog() {
+        val current = com.streamhub.app.core.I18n.lang
+        val options = arrayOf("Türkçe", "English")
+        val codes = arrayOf(com.streamhub.app.core.I18n.TR, com.streamhub.app.core.I18n.EN)
+        AlertDialog.Builder(this)
+            .setTitle(com.streamhub.app.core.I18n.s("language_title"))
+            .setSingleChoiceItems(options, options.indices.firstOrNull { codes[it] == current } ?: 0) { d, which ->
+                val chosen = codes[which]
+                d.dismiss()
+                if (chosen != com.streamhub.app.core.I18n.lang) {
+                    com.streamhub.app.core.I18n.set(this, chosen)
+                    // tum ekranlar yeni dille yeniden kurulur
+                    runCatching { recreate() }
+                }
+            }
+            .show()
     }
 
     override fun onBackPressed() {

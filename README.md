@@ -1,77 +1,81 @@
 # StreamHub
 
-Eklenti tabanlı, Material 3 arayüzlü Android video oynatıcısı. **Hiçbir içerik barındırmaz** — kaynak eklemek için eklenti kurarsın; CloudStream'in yaptığı gibi ama eklentiler **derlemesiz**: zip içine `plugin.json` koy, uygulama içinden yükle, çalışır.
+Plugin-based Android video player with Material 3 / Material You UI. **It hosts no content** — you install plugins to add sources; like CloudStream, but plugins are **compile-free**: put a `plugin.json` inside a zip, import it in the app, and it works.
 
-> **⚠️ Yasal Uyarı:** StreamHub hiçbir video/film/dizi dosyasını barındırmaz, depolamaz veya yüklemez. Uygulama yalnızca bir oynatıcı + eklenti altyapısıdır; içeriği eklentiler üzerinden alan kullanıcının tüm sorumluluğu kendisine aittir. Tam metin: [DISCLAIMER.md](DISCLAIMER.md). Uygulama ilk açılışta bu uyarıyı zorunlu diyalogla gösterir; "Kabul etmiyorum" dersen kapanır.
+> **⚠️ Legal Disclaimer:** StreamHub does not host, store, upload or distribute any video/movie/series file. The app is only a player + plugin platform; the user loads content from third-party sites through plugins and bears all responsibility. Full text: [DISCLAIMER.md](DISCLAIMER.md). The app shows this notice as a mandatory dialog on first launch; if you decline, it closes.
 
-## Özellikler (v2.4)
+## Features (v2.5)
 
-- **🔌 Derlemesiz eklenti sistemi** — zip içinde `plugin.json`; statik video listesi ya da CSS seçicileriyle site taraması; uygulama içinden ekle/kaldır
-- **🧩 Gömülü çözücüler** — NP_CONFIG (m3u8 + SHA-256 proof-of-work kapısı + altyazı), ContentX ailesi iframe'leri, sayfa içi m3u8/mp4 regex'leri — eklentiler otomatik kullanır
-- **🎬 ExoPlayer (Media3)** — HLS + MP4 + yerel dosya (content://), kaynak/quality seçici, altyazı desteği, **kaldığın yerden devam**
-- **📺 Resim içinde resim (PiP)** — ana ekrana basınca video küçük pencerede oynamaya devam eder (Android 8+); gerçek video oranı korunur
-- **⛶ Tam ekran** — yataya dönünce sistem çubukları otomatik gizlenir (immersive); tek dokunuşla aç/kapa
-- **🔄 Yön kilidi** — Oto / Dikey / Yatay seçimi oynatıcı üstünden tek dokunuşla
-- **⭐ Favoriler & 🕒 İzleme geçmişi** — cihazda saklanır
-- **▶ URL ile oynatma & 📁 yerel dosya oynatma** — eklentisiz de oynatıcı kullanılabilir
-- **🎨 Material 3** — koyu tema, bottom navigation, chip'ler, kartlar, snackbar'lar
-- **🐞 Görünür hatalar** — ekran içi hata + snackbar + "Siteyi WebView ile aç" (bot koruması çerezi aktarma) + Ayarlar'da **Son Çökme Kaydı** (çökme olursa sebebi görünür, kopyalanabilir)
-- **⚖️ Zorunlu yasal uyarı** — ilk açılışta kabul diyalogu, Ayarlar'dan her zaman ulaşılabilir
+- **🔌 Compile-free plugin system** — `plugin.json` inside a zip; static video list or site scraping with CSS selectors; add/remove in-app
+- **🧩 Built-in resolvers** — NP_CONFIG (m3u8 + SHA-256 proof-of-work gate + subtitles), the ContentX iframe family, in-page m3u8/mp4 regexes — plugins use them automatically
+- **🎬 ExoPlayer (Media3)** — HLS + MP4 + local files (content://), source/quality picker, subtitle support, **resume where you left off**
+- **📺 Picture-in-Picture (PiP)** — keep watching in a floating window when you press Home (Android 8+); the real video aspect ratio is preserved
+- **⛶ Fullscreen** — system bars hide automatically in landscape (immersive); one-tap toggle
+- **🔄 Orientation lock** — Auto / Portrait / Landscape from the player
+- **💬 Subtitles, done right** — plain text (no background box), fully customizable: **size, color, position, delay and font**; **external .srt/.vtt import** with exact delay in both directions; embedded track selection for multi-language videos
+- **🔊 Audio language** — pick the audio track when a video has more than one
+- **⚙️ In-player settings panel** — tap the video and the panel pops up bottom-right: fullscreen, PiP, orientation, sources, subtitles, audio language
+- **🌐 App language** — Turkish / English, chosen right after the first-launch legal notice (also changeable in Settings)
+- **⭐ Favorites & 🕒 Watch history** — stored on-device
+- **▶ Play from URL & 📁 local file playback** — the player works even without a plugin
+- **🎨 Material 3 + Material You** — dark theme, bottom navigation, dynamic wallpaper colors, chips, cards, snackbars
+- **🐞 Visible errors** — in-screen error + snackbar + "Open site in WebView" (passes bot-protection cookies) + **Last Crash Log** in Settings
+- **⚖️ Mandatory legal notice** — first-launch acceptance dialog, always reachable from Settings
 
-## Kurulum
+## Install
 
-1. Releases → `latest` → `StreamHub-debug.apk` indir ve kur
-2. Uygulamayı aç → yasal uyarıyı kabul et
-3. **Örnek eklentiyi kur:** repo'daki [`plugins/ornek-plugin.zip`](plugins/ornek-plugin.zip) indir → Ayarlar → ＋ Eklenti Ekle
-4. Kendi eklentini yazmak için: [PLUGINS.md](PLUGINS.md)
+1. Releases → `latest` → download `StreamHub-debug.apk` and install
+2. Open the app → accept the legal notice → pick your language
+3. **Install the sample plugin:** download [`plugins/ornek-plugin.zip`](plugins/ornek-plugin.zip) from the repo → Settings → ＋ Add Plugin (.zip)
+4. To write your own plugin: [PLUGINS.md](PLUGINS.md)
 
-## Eklenti — 60 saniyelik özet
+## Plugin — 60-second summary
 
-`plugin.json` içeren bir zip:
+A zip containing `plugin.json`:
 
 ```json
 {
-  "name": "Demo Videolar",
+  "name": "Demo Videos",
   "kind": "static",
   "entries": [
-    { "title": "Test videosu", "url": "https://ornek.com/video.m3u8" }
+    { "title": "Test video", "url": "https://example.com/video.m3u8" }
   ]
 }
 ```
 
-Zip'i uygulama içinden yükle — bitti. Site tarama, arama, bölüm ve video çıkarma kuralları dahil tam dokümantasyon: **[PLUGINS.md](PLUGINS.md)**.
+Import the zip in-app — done. Full documentation including site scraping, search, episodes and video extraction rules: **[PLUGINS.md](PLUGINS.md)**.
 
-## Derleme
+## Attribution — CloudStream
+
+Some player and networking features in this project were inspired by and adapted from **[CloudStream](https://github.com/recloudstream/cloudstream)** (recloudstream, **GPL-3.0** licensed):
+
+- single OkHttp network stack (Cloudflare DoH + persistent cookies + one UA) — modeled after CloudStream's single-point network layer
+- auto-retry with growing windows for 429/5xx + automatic fallback to an alternative source
+- switching to an alternative decoder on codec mismatch for Mali/Adreno GPUs
+- source/quality picker and resume-from-position behavior
+
+Thanks to CloudStream and its community. For GPL-3.0 compliance StreamHub is also licensed under **GPL-3.0**: [LICENSE](LICENSE).
+
+## Build
 
 ```bash
 ./gradlew assembleDebug
-# çıktı: app/build/outputs/apk/debug/app-debug.apk
+# output: app/build/outputs/apk/debug/app-debug.apk
 ```
 
-CI: her push'ta GitHub Actions APK derleyip Releases → `latest` altına koyar (`.github/workflows/build.yml`).
+CI: every push, GitHub Actions builds the APK and puts it under Releases → `latest` (`.github/workflows/build.yml`).
 
-## Proje yapısı
+## Project structure
 
 ```
 app/src/main/java/com/streamhub/app/
-├── core/       Provider arayüzü, JSON eklenti motoru, eklenti yöneticisi, favoriler/geçmiş, crash handler
-├── net/        OkHttp istemcisi + kalıcı çerezler + bot koruması algılama
-├── providers/  Gömülü video çözücüler (NP, ContentX)
-└── ui/         Material 3 ekranlar (Ana/Arama/Favoriler/Ayarlar/Detay/Oynatıcı/WebView)
-plugins/        Örnek eklenti (plugin.json + zip)
+├── core/       Provider interface, JSON plugin engine, plugin manager, favorites/history, i18n, crash handler
+├── net/        OkHttp client + persistent cookies + bot-protection detection
+├── providers/  Built-in video resolvers (NP, ContentX)
+└── ui/         Material 3 screens (Home/Search/Favorites/Settings/Detail/Player/WebView)
+plugins/        Sample plugin (plugin.json + zip)
 ```
 
-## Atıf — CloudStream
+## Legal
 
-Bu projedeki bazı oynatıcı ve ağ özellikleri, **[CloudStream](https://github.com/recloudstream/cloudstream)** projesinden (recloudstream, **GPL-3.0** lisanslı) esinlenilmiş ve ondan uyarlanmıştır:
-
-- tek OkHttp ağ yığını (Cloudflare DoH + kalıcı çerezler + tek UA) — CloudStream'in tek noktadan ağ katmanı yaklaşımı
-- 429/5xx için uzayan pencerelerle otomatik yeniden deneme + alternatif kaynağa otomatik geçiş
-- Mali/Adreno GPU'larda codec uyumsuzluğunda alternatif decoder'a geçiş
-- kaynak/quality seçici ve kaldığın yerden devam davranışı
-
-CloudStream'e ve topluluğuna teşekkürler. GPL-3.0 uyumluluğu gereği StreamHub da **GPL-3.0** ile lisanslanmıştır: [LICENSE](LICENSE).
-
-## Yasal
-
-Bu uygulama hiçbir video barındırmaz ve hiçbir siteyle bağlantılı değildir. Kişisel ve eğitim amaçlıdır. Ayrıntılar: [DISCLAIMER.md](DISCLAIMER.md). Lisans: **GPL-3.0** ([LICENSE](LICENSE)).
+This app hosts no videos and is not affiliated with any website. Intended for personal and educational use. Details: [DISCLAIMER.md](DISCLAIMER.md). License: **GPL-3.0** ([LICENSE](LICENSE)).

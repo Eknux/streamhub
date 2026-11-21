@@ -145,8 +145,8 @@ class EpisodeAdapter(
         val ep = episodes[position]
         val tv = row.getChildAt(0) as TextView
         tv.text = buildString {
-            if (ep.number != null) append("Bölüm ${ep.number}")
-            if (ep.season != null && ep.number != null) clear().append("S${ep.season} · Bölüm ${ep.number}")
+            if (ep.season != null && ep.number != null) append("S${ep.season} · ")
+            if (ep.number != null) append(com.streamhub.app.core.I18n.f("episode_n", "${ep.number}"))
             ep.title?.blankToNullSafe()?.let { if (isNotEmpty()) append(" — "); append(it) }
             if (isEmpty()) append(ep.url.substringAfterLast('/'))
         }

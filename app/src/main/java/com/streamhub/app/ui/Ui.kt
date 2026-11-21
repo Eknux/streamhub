@@ -152,7 +152,7 @@ object Ui {
             background = roundedBg(context, 0x33ff6b6b, 12)
         }
         box.addView(TextView(context).apply {
-            text = "Hata: $message"
+            text = com.streamhub.app.core.I18n.s("error_prefix") + " $message"
             setTextColor(ERROR_RED)
             textSize = 13f
         })
@@ -161,13 +161,13 @@ object Ui {
             setPadding(0, dp(context, 8), 0, 0)
         }
         if (onRetry != null) row.addView(TextView(context).apply {
-            text = "  Yeniden dene"
+            text = "  " + com.streamhub.app.core.I18n.s("retry")
             setTextColor(ACCENT)
             textSize = 14f
             setOnClickListener { onRetry() }
         })
         if (onWebview != null) row.addView(TextView(context).apply {
-            text = "  Siteyi WebView ile aç"
+            text = "  " + com.streamhub.app.core.I18n.s("open_in_webview")
             setTextColor(ACCENT_2)
             textSize = 14f
             setOnClickListener { onWebview() }
