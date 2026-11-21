@@ -19,15 +19,34 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 
 object Ui {
-    val BG = 0xFF0b0e14.toInt()
-    val SURFACE = 0xFF141926.toInt()
-    val SURFACE_2 = 0xFF1d2334.toInt()
-    val ACCENT = 0xFF8b9dff.toInt()
-    val ACCENT_2 = 0xFFffd166.toInt()
-    val TEXT_MAIN = 0xFFe6e9f2.toInt()
-    val TEXT_DIM = 0xFF9aa3b5.toInt()
-    val ERROR_RED = 0xFFff6b6b.toInt()
+    // sabit koyu yedekler: tema cozulemediginde (fallback ekran vb.) kullanilir
+    private val BG_DARK = 0xFF0b0e14.toInt()
+    private val SURFACE_DARK = 0xFF141926.toInt()
+    private val SURFACE_2_DARK = 0xFF1d2334.toInt()
+    private val ACCENT_DARK = 0xFF8b9dff.toInt()
+    private val ACCENT_2_DARK = 0xFFffd166.toInt()
+    private val TEXT_MAIN_DARK = 0xFFe6e9f2.toInt()
+    private val TEXT_DIM_DARK = 0xFF9aa3b5.toInt()
+    private val ERROR_DARK = 0xFFff6b6b.toInt()
+
+    // Material You: renkler aktif activity temasi uzerinden cozulur —
+    // Android 12+ duvar kagidi paleti (dinamik renk) otomatik yansir
+    val BG get() = themed(com.google.android.material.R.attr.colorSurface, BG_DARK)
+    val SURFACE get() = themed(com.google.android.material.R.attr.colorSurface, SURFACE_DARK)
+    val SURFACE_2 get() = themed(com.google.android.material.R.attr.colorSurfaceVariant, SURFACE_2_DARK)
+    val ACCENT get() = themed(com.google.android.material.R.attr.colorPrimary, ACCENT_DARK)
+    val ACCENT_2 get() = themed(com.google.android.material.R.attr.colorTertiary, ACCENT_2_DARK)
+    val TEXT_MAIN get() = themed(com.google.android.material.R.attr.colorOnSurface, TEXT_MAIN_DARK)
+    val TEXT_DIM get() = themed(com.google.android.material.R.attr.colorOnSurfaceVariant, TEXT_DIM_DARK)
+    val ERROR_RED get() = themed(com.google.android.material.R.attr.colorError, ERROR_DARK)
     val DIVIDER = 0x22ffffff
+
+    private fun themed(attr: Int, fallback: Int): Int {
+        val ctx = com.streamhub.app.App.uiContext ?: return fallback
+        return runCatching {
+            com.google.android.material.color.MaterialColors.getColor(ctx, attr, fallback)
+        }.getOrDefault(fallback)
+    }
 
     val posterCache = object : LruCache<String, Bitmap>(24 * 1024) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount / 1024

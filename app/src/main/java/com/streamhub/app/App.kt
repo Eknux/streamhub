@@ -1,7 +1,10 @@
 package com.streamhub.app
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.os.Bundle
+import com.google.android.material.color.DynamicColors
 import com.streamhub.app.core.CrashHandler
 import com.streamhub.app.core.PluginManager
 import com.streamhub.app.core.Provider
@@ -9,6 +12,12 @@ import com.streamhub.app.core.Store
 import com.streamhub.app.net.Http
 
 class App : Application() {
+
+    companion object {
+        /** Aktif (temali) activity — Ui renkleri Material You paletini buradan okur. */
+        @Volatile
+        var uiContext: Context? = null
+    }
 
     lateinit var http: Http
         private set
@@ -35,6 +44,19 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashHandler.install(this)
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(a: Activity, b: Bundle?) { uiContext = a }
+            override fun onActivityStarted(a: Activity) {}
+            override fun onActivityResumed(a: Activity) {}
+            override fun onActivityPaused(a: Activity) {}
+            override fun onActivityStopped(a: Activity) {}
+            override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
+            override fun onActivityDestroyed(a: Activity) {
+                if (uiContext === a) uiContext = null
+            }
+        })
+        // Material You: Android 12+ duvar kagidi paleti tum aktivitelere uygulanir
+        runCatching { DynamicColors.applyToActivitiesIfAvailable(this) }
         runCatching { Store.init(this) }
         http = Http(this)
         // eklenti klasoru/zip hatalari uygulamayi asla kapatmamali
