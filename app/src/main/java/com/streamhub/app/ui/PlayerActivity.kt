@@ -5,6 +5,7 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -23,6 +24,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -157,10 +159,12 @@ class PlayerActivity : AppCompatActivity() {
             setMargins(0, 0, Ui.dp(this@PlayerActivity, 10), Ui.dp(this@PlayerActivity, 18))
         })
 
-        playerView.setControllerVisibilityListener { vis ->
-            if (inPip) return@setControllerVisibilityListener
-            overlay.visibility = if (vis == View.VISIBLE) View.VISIBLE else View.GONE
-        }
+        playerView.setControllerVisibilityListener(object : PlayerView.ControllerVisibilityListener {
+            override fun onVisibilityChanged(visibility: Int) {
+                if (inPip) return
+                overlay.visibility = if (visibility == View.VISIBLE) View.VISIBLE else View.GONE
+            }
+        })
 
         setContentView(frame)
         applySubPosition()
@@ -563,7 +567,7 @@ class PlayerActivity : AppCompatActivity() {
 
         // renk
         root.addView(dimLabel(I18n.s("sub_color")))
-        chipRow(List(subColors.size) { "" }, subColorIdx, subColors) { subColorIdx = it }
+        chipRow(List(subColors.size) { "" }, subColorIdx, subColors.toList()) { subColorIdx = it }
 
         // konum
         root.addView(dimLabel(I18n.s("sub_pos")))
@@ -600,7 +604,7 @@ class PlayerActivity : AppCompatActivity() {
         var textDisabled = false
         runCatching {
             if (p != null) {
-                textDisabled = p.trackSelectionParameters.isTrackTypeDisabled(C.TRACK_TYPE_TEXT)
+                textDisabled = p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
                 p.currentTracks.groups.forEach { g ->
                     if (g.type != C.TRACK_TYPE_TEXT) return@forEach
                     for (i in 0 until g.length) {

@@ -179,7 +179,7 @@ class MainActivity : AppCompatActivity() {
             text = com.streamhub.app.core.I18n.s("copy_error")
             setTextColor(0xFF8b9dff.toInt())
             textSize = 15f
-            setTypeface(Typeface.BOLD)
+            setTypeface(typeface, Typeface.BOLD)
             gravity = Gravity.CENTER
             setPadding(0, dp(12), 0, 0)
             setOnClickListener {
