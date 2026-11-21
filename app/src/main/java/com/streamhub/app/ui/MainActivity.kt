@@ -558,7 +558,7 @@ class MainActivity : AppCompatActivity() {
                     .show()
             })
         }
-        col.addView(listSubtitle("StreamHub v2.2 — Material You\n github.com/Eknux/streamhub"))
+        col.addView(listSubtitle("StreamHub v2.2.1 — Material You\n github.com/Eknux/streamhub"))
 
         pageSettings.addView(col)
     }

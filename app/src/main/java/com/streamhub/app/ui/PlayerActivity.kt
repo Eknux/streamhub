@@ -19,6 +19,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.streamhub.app.core.Store
@@ -31,6 +32,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var overlay: LinearLayout
     private var lastSourceIndex = 0
     private var resumed = false
+    private var autoRetries = 0
     private var startMs = 0L
     private var epUrl = ""
     private var seriesUrl: String? = null
@@ -104,6 +106,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun play(index: Int) {
         val source = StreamSession.sources.getOrNull(index) ?: return
         lastSourceIndex = index
+        autoRetries = 0
 
         val headers = buildMap {
             source.referer?.let { put("Referer", it) }
@@ -135,7 +138,24 @@ class PlayerActivity : AppCompatActivity() {
                             }
                         }
                         override fun onPlayerError(error: PlaybackException) {
-                            showErrorOverlay("Oynatma hatası: ${error.errorCodeName}. Başka kaynak dene (⟳).")
+                            val code = httpStatusCode(error)
+                            // 429 (hiz limiti) ve 5xx gecicidir — sessizce 2 kez yeniden dene
+                            if ((code == 429 || code in 500..599) && autoRetries < 2) {
+                                autoRetries++
+                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                    player?.prepare()
+                                    player?.playWhenReady = true
+                                }, 2500)
+                                return
+                            }
+                            val msg = when (code) {
+                                null -> "Oynatma hatası: ${error.errorCodeName}"
+                                429 -> "Oynatma hatası: HTTP 429 — kaynak sunucusu hız limiti"
+                                403 -> "Oynatma hatası: HTTP 403 — sunucu isteği reddetti"
+                                404 -> "Oynatma hatası: HTTP 404 — dosya bulunamadı"
+                                else -> "Oynatma hatası: HTTP $code"
+                            }
+                            showErrorOverlay("$msg. Başka kaynak dene (⟳).")
                         }
                     })
                 }
@@ -167,6 +187,17 @@ class PlayerActivity : AppCompatActivity() {
     private fun subMime(url: String): String = when {
         url.endsWith(".srt", true) -> MimeTypes.APPLICATION_SUBRIP
         else -> MimeTypes.TEXT_VTT
+    }
+
+    /** HTTP durum kodunu cikarir (yuvaya gore 1-2 seviye derin olabilir). */
+    private fun httpStatusCode(error: PlaybackException): Int? {
+        var cause: Throwable? = error.cause
+        repeat(3) {
+            val c = cause ?: return null
+            if (c is HttpDataSource.InvalidResponseCodeException) return c.responseCode
+            cause = c.cause
+        }
+        return null
     }
 
     private fun showErrorOverlay(message: String) {
