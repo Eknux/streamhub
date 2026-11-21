@@ -1,0 +1,29 @@
+{
+  "name": "Demo Videolar",
+  "kind": "static",
+  "version": "1.0",
+  "description": "Herkese açık test videoları. Bu, StreamHub eklentisinin nasıl göründüğünü gösteren örnek zip'tir.",
+  "baseUrl": "",
+  "entries": [
+    {
+      "title": "Big Buck Bunny (MP4)",
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "poster": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg"
+    },
+    {
+      "title": "Elephants Dream (MP4)",
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "poster": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg"
+    },
+    {
+      "title": "For Bigger Blazes (MP4)",
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "poster": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg"
+    },
+    {
+      "title": "Mux HLS Demo (m3u8)",
+      "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+      "poster": ""
+    }
+  ]
+}

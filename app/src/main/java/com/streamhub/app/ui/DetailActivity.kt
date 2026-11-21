@@ -6,13 +6,19 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.snackbar.Snackbar
 import com.streamhub.app.App
-import com.streamhub.app.core.Episode
+import com.streamhub.app.R
+import com.streamhub.app.core.Provider
+import com.streamhub.app.core.SeriesInfo
+import com.streamhub.app.core.Store
 import com.streamhub.app.net.ChallengeException
 import kotlinx.coroutines.launch
 
@@ -20,64 +26,89 @@ class DetailActivity : AppCompatActivity() {
 
     private lateinit var app: App
     private lateinit var url: String
+    private var providerName: String? = null
     private lateinit var titleView: TextView
     private lateinit var descView: TextView
     private lateinit var posterView: ImageView
+    private lateinit var favIcon: ImageView
     private lateinit var progress: ProgressBar
     private lateinit var errorSlot: LinearLayout
     private lateinit var episodeList: RecyclerView
+    private var info: SeriesInfo? = null
+    private var posterUrl: String? = null
+    private var seriesTitle: String = ""
     private var loadingLinks = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         app = application as App
-        url = intent.getStringExtra("url") ?: finish().let { return }
-        val startTitle = intent.getStringExtra("title") ?: ""
+        url = intent.getStringExtra("url") ?: run { finish(); return }
+        providerName = intent.getStringExtra("providerName")
+        posterUrl = intent.getStringExtra("poster")
+        seriesTitle = intent.getStringExtra("title") ?: url.substringAfterLast('/')
 
-        val scroll = android.widget.ScrollView(this).apply { setBackgroundColor(Ui.BG) }
+        val scroll = ScrollView(this).apply { setBackgroundColor(Ui.BG) }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(Ui.dp(this@DetailActivity, 16), Ui.dp(this@DetailActivity, 12), Ui.dp(this@DetailActivity, 16), Ui.dp(this@DetailActivity, 16))
+            setPadding(Ui.dp(this@DetailActivity, 14), Ui.dp(this@DetailActivity, 10), Ui.dp(this@DetailActivity, 14), Ui.dp(this@DetailActivity, 20))
         }
-        scroll.addView(root, android.widget.FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        scroll.addView(root, ViewGroup.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val posterCard = Ui.card(this)
         posterView = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
+            layoutParams = ViewGroup.LayoutParams(Ui.dp(this@DetailActivity, 108), Ui.dp(this@DetailActivity, 156))
         }
-        header.addView(posterView, LinearLayout.LayoutParams(
-            Ui.dp(this, 110), Ui.dp(this, 160)))
+        posterCard.addView(posterView)
+        header.addView(posterCard)
+
         val infoCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         titleView = TextView(this).apply {
-            text = startTitle
+            text = seriesTitle
             setTextColor(Ui.TEXT_MAIN)
-            textSize = 20f
+            textSize = 19f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         }
+        infoCol.addView(titleView, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
+        favIcon = ImageView(this).apply {
+            setImageResource(R.drawable.ic_fav)
+            val isFav = Store.isFavorite(url)
+            setColorFilter(if (isFav) Ui.ACCENT_2 else Ui.TEXT_DIM)
+            layoutParams = LinearLayout.LayoutParams(Ui.dp(this@DetailActivity, 30), Ui.dp(this@DetailActivity, 30)).apply {
+                topMargin = Ui.dp(this@DetailActivity, 10)
+            }
+            setOnClickListener { toggleFav() }
+        }
+        infoCol.addView(favIcon)
+        providerName?.let {
+            infoCol.addView(TextView(this).apply {
+                text = "🔌 $it"
+                setTextColor(Ui.TEXT_DIM)
+                textSize = 12f
+                setPadding(0, Ui.dp(this@DetailActivity, 8), 0, 0)
+            })
+        }
+        header.addView(infoCol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginStart = Ui.dp(this@DetailActivity, 14)
+        })
+        root.addView(header, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
+
         descView = TextView(this).apply {
             setTextColor(Ui.TEXT_DIM)
             textSize = 13f
         }
-        infoCol.addView(titleView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        infoCol.addView(descView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = Ui.dp(this@DetailActivity, 8)
+        root.addView(descView, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = Ui.dp(this@DetailActivity, 12)
         })
-        header.addView(infoCol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-            marginStart = Ui.dp(this@DetailActivity, 14)
-        })
-        root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         root.addView(Ui.sectionTitle(this, "Bölümler"))
-
         progress = ProgressBar(this)
-        root.addView(progress, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-
+        root.addView(progress, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
         errorSlot = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(errorSlot, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-
+        root.addView(errorSlot, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
         episodeList = RecyclerView(this).apply { layoutManager = LinearLayoutManager(this@DetailActivity) }
-        root.addView(episodeList, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(episodeList, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         setContentView(scroll)
         showProgress(true)
@@ -85,46 +116,63 @@ class DetailActivity : AppCompatActivity() {
     }
 
     private suspend fun load() {
-        val provider = app.providers.firstOrNull() ?: run {
-            showError("Sağlayıcı yok", allowWebView = false); showProgress(false); return
+        val provider = app.providerByName(providerName)
+        if (provider == null) {
+            showError("Eklenti bulunamadı — Ayarlar'dan eklenti yükle", allowWebView = false)
+            runOnUiThread { showProgress(false) }
+            return
         }
         try {
-            val info = provider.load(url)
-            if (info == null) {
-                showError("Dizi yüklenemedi", allowWebView = true); return
+            val loaded = provider.load(url)
+            if (loaded == null) {
+                showError("İçerik yüklenemedi", allowWebView = true)
+                runOnUiThread { showProgress(false) }
+                return
             }
+            info = loaded
+            info?.posterUrl?.let { posterUrl = it }
             runOnUiThread {
-                titleView.text = info.title
-                descView.text = info.description ?: ""
-                Ui.loadPoster(lifecycleScope, app.http, posterView, info.posterUrl,
-                    Ui.dp(this, 110), Ui.dp(this, 160))
-                episodeList.adapter = EpisodeAdapter(info.episodes) { index ->
-                    openPlayer(info.episodes[index], provider)
+                titleView.text = loaded.title
+                seriesTitle = loaded.title
+                descView.text = loaded.description ?: ""
+                Ui.loadPoster(lifecycleScope, app.http, posterView, posterUrl,
+                    Ui.dp(this, 108), Ui.dp(this, 156))
+                updateFavIcon()
+                episodeList.adapter = EpisodeAdapter(loaded.episodes) { i -> openPlayer(provider, loaded.episodes[i]) }
+                if (loaded.episodes.isEmpty()) {
+                    Snackbar.make(episodeList, "Bölüm bulunamadı — eklentinin episodeSelector kurallarını kontrol et", Snackbar.LENGTH_LONG).show()
                 }
             }
         } catch (e: ChallengeException) {
             showError(e.message ?: "Bot koruması", allowWebView = true, challengeUrl = e.pageUrl)
         } catch (e: Exception) {
-            showError(e.message ?: e.javaClass.simpleName, allowWebView = false, retry = { lifecycleScope.launch { load() } })
+            showError(e.message ?: e.javaClass.simpleName, allowWebView = false,
+                retry = { lifecycleScope.launch { load() } })
         } finally {
             runOnUiThread { showProgress(false) }
         }
     }
 
-    private fun openPlayer(ep: Episode, provider: com.streamhub.app.core.Provider) {
+    private fun openPlayer(provider: Provider, ep: com.streamhub.app.core.Episode) {
         if (loadingLinks) return
         loadingLinks = true
         showProgress(true)
-        Ui.toast(this, "Kaynaklar çözülüyor...")
+        Snackbar.make(episodeList, "Kaynaklar çözülüyor...", Snackbar.LENGTH_SHORT).show()
         lifecycleScope.launch {
             try {
                 val sources = provider.loadLinks(ep.url)
                 if (sources.isEmpty()) {
-                    Ui.toast(this@DetailActivity, "Video kaynağı bulunamadı — WebView ile siteyi açıp çerezleri yenilemeyi dene")
+                    Ui.toast(this@DetailActivity, "Video kaynağı bulunamadı — eklentinin player kuralları eksik olabilir")
                 } else {
                     StreamSession.sources = sources
-                    StreamSession.title = "${titleView.text} — ${ep.title ?: ""}"
-                    startActivity(Intent(this@DetailActivity, PlayerActivity::class.java))
+                    startActivity(
+                        Intent(this@DetailActivity, PlayerActivity::class.java)
+                            .putExtra("title", "$seriesTitle — ${ep.title ?: "Bölüm " + (ep.number ?: 1)}")
+                            .putExtra("seriesUrl", url)
+                            .putExtra("episodeUrl", ep.url)
+                            .putExtra("poster", posterUrl)
+                            .putExtra("startMs", Store.positionFor(ep.url))
+                    )
                 }
             } catch (e: ChallengeException) {
                 showError(e.message ?: "Bot koruması", allowWebView = true, challengeUrl = e.pageUrl)
@@ -135,6 +183,18 @@ class DetailActivity : AppCompatActivity() {
                 runOnUiThread { showProgress(false) }
             }
         }
+    }
+
+    private fun toggleFav() {
+        val added = Store.toggleFavorite(
+            Store.FavItem(seriesTitle, url, posterUrl, providerName ?: "", false, System.currentTimeMillis())
+        )
+        updateFavIcon()
+        Snackbar.make(episodeList, if (added) "⭐ Favorilere eklendi" else "Favorilerden çıkarıldı", Snackbar.LENGTH_SHORT).show()
+    }
+
+    private fun updateFavIcon() {
+        favIcon.setColorFilter(if (Store.isFavorite(url)) Ui.ACCENT_2 else Ui.TEXT_DIM)
     }
 
     private fun showProgress(show: Boolean) {
@@ -150,7 +210,7 @@ class DetailActivity : AppCompatActivity() {
         runOnUiThread {
             errorSlot.removeAllViews()
             errorSlot.addView(
-                Ui.errorBox(this, message, onRetry = retry, onWebview = if (allowWebView) {
+                Ui.errorBoxCompat(this, message, retry, if (allowWebView) {
                     { startActivity(Intent(this, WebViewActivity::class.java).putExtra("url", challengeUrl ?: url)) }
                 } else null)
             )

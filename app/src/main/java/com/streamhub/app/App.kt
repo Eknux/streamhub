@@ -1,10 +1,10 @@
 package com.streamhub.app
 
 import android.app.Application
-import com.streamhub.app.core.PluginLoader
+import com.streamhub.app.core.CrashHandler
+import com.streamhub.app.core.PluginManager
 import com.streamhub.app.core.Provider
 import com.streamhub.app.net.Http
-import com.streamhub.app.providers.Dizilla
 
 class App : Application() {
 
@@ -13,16 +13,34 @@ class App : Application() {
 
     val providers = mutableListOf<Provider>()
 
-    /** Eklenti yukleme sirasinda bir sey patlarsa burada tutulur, ana ekranda gosterilir. */
-    var pluginError: String? = null
-        private set
+    /** Yuklenen eklentilerin yukleme hatalari: "dosya — hata" biciminde. */
+    val pluginErrors = mutableListOf<String>()
+
+    var activeProviderName: String
+        get() = getSharedPreferences("streamhub_prefs", MODE_PRIVATE)
+            .getString("active_plugin", "").orEmpty()
+        set(value) {
+            getSharedPreferences("streamhub_prefs", MODE_PRIVATE).edit()
+                .putString("active_plugin", value).apply()
+        }
 
     override fun onCreate() {
         super.onCreate()
+        // Her olasi cokme kaydedilir; Ayarlar -> "Son cokme kaydi"ndan gorunur.
+        CrashHandler.install(this)
+        com.streamhub.app.core.Store.init(this)
         http = Http(this)
-        providers.add(Dizilla(http))
-        runCatching { PluginLoader.loadPlugins(this, http) }
-            .onSuccess { providers.addAll(it) }
-            .onFailure { pluginError = "Eklenti yukleme hatasi: ${it.message}" }
+        reloadPlugins()
+    }
+
+    fun providerByName(name: String?): Provider? =
+        providers.firstOrNull { it.name == name } ?: providers.firstOrNull()
+
+    fun reloadPlugins() {
+        providers.clear()
+        pluginErrors.clear()
+        val (loaded, errors) = PluginManager.loadAll(this, http)
+        providers.addAll(loaded)
+        pluginErrors.addAll(errors)
     }
 }

@@ -1,0 +1,7 @@
+<resources>
+    <item name="bottom_nav" type="id" />
+    <item name="page_home" type="id" />
+    <item name="page_search" type="id" />
+    <item name="page_favs" type="id" />
+    <item name="page_settings" type="id" />
+</resources>

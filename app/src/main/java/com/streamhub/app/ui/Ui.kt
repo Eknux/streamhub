@@ -3,11 +3,10 @@ package com.streamhub.app.ui
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.util.LruCache
-import android.view.Gravity
-import android.view.ViewGroup
+import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -17,15 +16,18 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 object Ui {
-
     val BG = 0xFF0b0e14.toInt()
-    val CARD_BG = 0xFF161b26.toInt()
-    val ACCENT = 0xFF7c8cff.toInt()
+    val SURFACE = 0xFF141926.toInt()
+    val SURFACE_2 = 0xFF1d2334.toInt()
+    val ACCENT = 0xFF8b9dff.toInt()
+    val ACCENT_2 = 0xFFffd166.toInt()
     val TEXT_MAIN = 0xFFe6e9f2.toInt()
     val TEXT_DIM = 0xFF9aa3b5.toInt()
-    val ERROR_RED = 0xFFff5d5d.toInt()
+    val ERROR_RED = 0xFFff6b6b.toInt()
+    val DIVIDER = 0x22ffffff
 
     val posterCache = object : LruCache<String, Bitmap>(24 * 1024) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount / 1024
@@ -45,17 +47,12 @@ object Ui {
         view.setImageDrawable(null)
         view.tag = url
         if (url.isNullOrBlank()) return
-        val cached = posterCache.get(url)
-        if (cached != null) {
-            view.setImageBitmap(cached)
-            return
-        }
+        posterCache.get(url)?.let { view.setImageBitmap(it); return }
         scope.launch {
             val bmp = runCatching {
                 withContext(Dispatchers.IO) {
                     val req = okhttp3.Request.Builder().url(url)
                         .header("User-Agent", Http.UA)
-                        .header("Referer", "https://dizilla.la/")
                         .build()
                     http.client.newCall(req).execute().use { r ->
                         if (!r.isSuccessful) return@use null
@@ -87,7 +84,44 @@ object Ui {
     fun toast(context: Context, message: String) =
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
 
-    fun errorBox(
+    fun fmtTime(ms: Long): String {
+        val total = (ms.coerceAtLeast(0)) / 1000
+        val h = total / 3600; val m = (total % 3600) / 60; val s = total % 60
+        return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, s)
+        else String.format(Locale.US, "%02d:%02d", m, s)
+    }
+
+    fun card(context: Context): com.google.android.material.card.MaterialCardView =
+        com.google.android.material.card.MaterialCardView(context).apply {
+            radius = dp(context, 14).toFloat()
+            cardElevation = 0f
+            strokeWidth = 0
+            setCardBackgroundColor(SURFACE)
+        }
+
+    fun sectionTitle(context: Context, text: String): TextView = TextView(context).apply {
+        this.text = text
+        setTextColor(TEXT_MAIN)
+        textSize = 17f
+        setPadding(dp(context, 16), dp(context, 14), dp(context, 8), dp(context, 6))
+        setTypeface(typeface, Typeface.BOLD)
+    }
+
+    fun divider(context: Context): View = View(context).apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).apply {
+            setMargins(dp(context, 16), 0, dp(context, 16), 0)
+        }
+        setBackgroundColor(DIVIDER)
+    }
+
+    fun roundedBg(context: Context, color: Int, radiusDp: Int): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(context, radiusDp).toFloat()
+        }
+
+    /** Ekran ici hata kutusu: mesaj + "Yeniden dene" + "Siteyi WebView ile ac". */
+    fun errorBoxCompat(
         context: Context,
         message: String,
         onRetry: (() -> Unit)? = null,
@@ -95,52 +129,36 @@ object Ui {
     ): LinearLayout {
         val box = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(context, 16), dp(context, 12), dp(context, 16), dp(context, 12))
-            background = GradientDrawable().apply {
-                setColor(0x33ff5d5d)
-                cornerRadius = dp(context, 10).toFloat()
-            }
+            setPadding(dp(context, 14), dp(context, 10), dp(context, 14), dp(context, 10))
+            background = roundedBg(context, 0x33ff6b6b, 12)
         }
         box.addView(TextView(context).apply {
             text = "Hata: $message"
             setTextColor(ERROR_RED)
-            textSize = 14f
+            textSize = 13f
         })
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, dp(context, 8), 0, 0)
         }
-        if (onRetry != null) {
-            row.addView(TextView(context).apply {
-                text = "  Yeniden dene  "
-                setTextColor(ACCENT)
-                textSize = 14f
-                setOnClickListener { onRetry() }
-            })
-        }
-        if (onWebview != null) {
-            row.addView(TextView(context).apply {
-                text = "  Siteyi WebView ile aç  "
-                setTextColor(0xFFffd166.toInt())
-                textSize = 14f
-                setOnClickListener { onWebview() }
-            })
-        }
+        if (onRetry != null) row.addView(TextView(context).apply {
+            text = "  Yeniden dene"
+            setTextColor(ACCENT)
+            textSize = 14f
+            setOnClickListener { onRetry() }
+        })
+        if (onWebview != null) row.addView(TextView(context).apply {
+            text = "  Siteyi WebView ile aç"
+            setTextColor(ACCENT_2)
+            textSize = 14f
+            setOnClickListener { onWebview() }
+        })
         box.addView(row)
         return box
-    }
-
-    fun sectionTitle(context: Context, text: String): TextView = TextView(context).apply {
-        this.text = text
-        setTextColor(TEXT_MAIN)
-        textSize = 18f
-        setPadding(dp(context, 16), dp(context, 14), dp(context, 8), dp(context, 4))
-        setTypeface(typeface, android.graphics.Typeface.BOLD)
     }
 }
 
 /** Oynaticiya gecirilen aktif kaynaklar (ayni process icerisinde paylasilir). */
 object StreamSession {
     var sources: List<com.streamhub.app.core.VideoSource> = emptyList()
-    var title: String = ""
 }

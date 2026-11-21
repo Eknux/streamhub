@@ -1,10 +1,8 @@
 package com.streamhub.app.ui
 
 import android.graphics.Color
-import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -19,20 +17,34 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.streamhub.app.core.Store
 import com.streamhub.app.core.VideoSource
 
 class PlayerActivity : AppCompatActivity() {
 
     private var player: ExoPlayer? = null
     private lateinit var playerView: PlayerView
-    private lateinit var overlaySlot: LinearLayout
+    private lateinit var overlay: LinearLayout
     private var lastSourceIndex = 0
+    private var resumed = false
+    private var startMs = 0L
+    private var epUrl = ""
+    private var seriesUrl: String? = null
+    private var titleText = ""
+    private var poster: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        titleText = intent.getStringExtra("title") ?: "StreamHub"
+        startMs = intent.getLongExtra("startMs", 0L)
+        seriesUrl = intent.getStringExtra("seriesUrl")
+        epUrl = intent.getStringExtra("episodeUrl") ?: intent.getStringExtra("uri").orEmpty()
+        poster = intent.getStringExtra("poster")
 
         val frame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
 
@@ -40,77 +52,85 @@ class PlayerActivity : AppCompatActivity() {
             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
             useController = true
         }
-        frame.addView(playerView, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        frame.addView(playerView, FrameLayout.LayoutParams(-1, -1))
 
-        overlaySlot = LinearLayout(this).apply {
+        overlay = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            gravity = Gravity.END
             setPadding(Ui.dp(this@PlayerActivity, 12), Ui.dp(this@PlayerActivity, 8), Ui.dp(this@PlayerActivity, 12), 0)
         }
-        val sourceBtn = TextView(this).apply {
-            text = "⟳ Kaynak değiştir"
-            setTextColor(Ui.ACCENT)
-            textSize = 14f
-            setOnClickListener { pickSource(replay = true) }
-        }
-        overlaySlot.gravity = Gravity.END
-        overlaySlot.addView(sourceBtn)
-        frame.addView(overlaySlot, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+        addSourceButton()
+        frame.addView(overlay, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
 
         setContentView(frame)
 
-        val sources = StreamSession.sources
-        if (sources.isEmpty()) {
-            Ui.toast(this, "Kaynak yok — detay ekranından tekrar dene")
+        if (StreamSession.sources.isEmpty() && epUrl.isNotBlank()) {
+            StreamSession.sources = listOf(
+                VideoSource(name = "Doğrudan", url = epUrl, isM3u8 = epUrl.contains(".m3u8"))
+            )
+        }
+        if (StreamSession.sources.isEmpty()) {
+            Ui.toast(this, "Oynanacak kaynak yok")
             finish()
             return
         }
-        pickSource(replay = false)
+        if (StreamSession.sources.size > 1) pickSource() else play(0)
     }
 
-    private fun pickSource(replay: Boolean) {
+    private fun addSourceButton() {
+        overlay.removeAllViews()
+        overlay.addView(TextView(this).apply {
+            text = "⟳ Kaynaklar"
+            setTextColor(Ui.ACCENT)
+            textSize = 14f
+            setPadding(Ui.dp(this@PlayerActivity, 8), Ui.dp(this@PlayerActivity, 6), Ui.dp(this@PlayerActivity, 8), Ui.dp(this@PlayerActivity, 6))
+            setOnClickListener { pickSource() }
+        })
+    }
+
+    private fun pickSource() {
         val sources = StreamSession.sources
         if (sources.isEmpty()) return
-        if (sources.size == 1) {
-            play(0)
-        } else {
-            val names = sources.map { it.name }.toTypedArray()
-            AlertDialog.Builder(this)
-                .setTitle("Kaynak seç")
-                .setItems(names) { _, which -> play(which) }
-                .setOnCancelListener { if (player == null) play(lastSourceIndex) }
-                .show()
-            if (!replay && player == null) {
-                // dialog acilirken arka plan kara — ilk kaynakla sessizce hazirlan
-                play(lastSourceIndex)
+        if (sources.size == 1) { play(0); return }
+        AlertDialog.Builder(this)
+            .setTitle("Kaynak seç")
+            .setItems(sources.map { it.name }.toTypedArray()) { _, which -> play(which) }
+            .setNegativeButton("İptal") { d, _ ->
+                if (player == null) { d.dismiss(); play(lastSourceIndex) } else d.dismiss()
             }
-        }
+            .show()
     }
 
     private fun play(index: Int) {
         val source = StreamSession.sources.getOrNull(index) ?: return
         lastSourceIndex = index
 
+        val headers = buildMap {
+            source.referer?.let { put("Referer", it) }
+            for ((k, v) in source.headers) put(k, v)
+            if (!containsKey("User-Agent")) put("User-Agent", com.streamhub.app.net.Http.UA)
+        }
         val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(source.headers["User-Agent"] ?: com.streamhub.app.net.Http.UA)
+            .setUserAgent(headers["User-Agent"] ?: com.streamhub.app.net.Http.UA)
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(20_000)
             .setReadTimeoutMs(40_000)
-            .setDefaultRequestProperties(
-                buildMap {
-                    source.referer?.let { put("Referer", it) }
-                    put("User-Agent", source.headers["User-Agent"] ?: com.streamhub.app.net.Http.UA)
-                    for ((k, v) in source.headers) if (k != "User-Agent") put(k, v)
-                }
-            )
+            .setDefaultRequestProperties(headers)
+        // content:// (yerel dosya) + file + http hepsini kapsar
+        val dataSourceFactory = DefaultDataSource.Factory(this, httpFactory)
 
         if (player == null) {
             player = ExoPlayer.Builder(this)
-                .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
-                .build().also {
-                    playerView.player = it
-                    it.addListener(object : Player.Listener {
+                .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+                .build().also { p ->
+                    playerView.player = p
+                    p.addListener(object : Player.Listener {
+                        override fun onPlaybackStateChanged(state: Int) {
+                            if (state == Player.STATE_READY && !resumed && startMs > 0) {
+                                p.seekTo(startMs)
+                                resumed = true
+                            }
+                        }
                         override fun onPlayerError(error: PlaybackException) {
                             showErrorOverlay("Oynatma hatası: ${error.errorCodeName}. Başka kaynak dene (⟳).")
                         }
@@ -119,7 +139,7 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         val subtitleConfigs = source.subtitles.map { sub ->
-            MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.url))
+            MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(sub.url))
                 .setMimeType(subMime(sub.url))
                 .setLabel(sub.label)
                 .setLanguage("tr")
@@ -128,17 +148,16 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         val mediaItem = MediaItem.Builder()
-            .setUri(source.url)
+            .setUri(android.net.Uri.parse(source.url))
             .setMimeType(if (source.isM3u8) MimeTypes.APPLICATION_M3U8 else null)
-            .setMediaMetadata(MediaMetadata.Builder().setTitle(StreamSession.title).build())
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(titleText).build())
             .setSubtitleConfigurations(subtitleConfigs)
             .build()
 
-        hideErrorOverlay()
         player?.apply {
             setMediaItem(mediaItem)
             prepare()
-            play()
+            playWhenReady = true
         }
     }
 
@@ -149,44 +168,45 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun showErrorOverlay(message: String) {
         runOnUiThread {
-            overlaySlot.removeAllViews()
-            overlaySlot.gravity = Gravity.CENTER
-            overlaySlot.addView(TextView(this).apply {
+            overlay.removeAllViews()
+            overlay.gravity = Gravity.CENTER
+            overlay.addView(TextView(this).apply {
                 text = message
                 setTextColor(Ui.ERROR_RED)
                 textSize = 14f
                 gravity = Gravity.CENTER
+                setPadding(Ui.dp(this@PlayerActivity, 24), 0, Ui.dp(this@PlayerActivity, 24), 0)
             })
-            overlaySlot.addView(TextView(this).apply {
+            overlay.addView(TextView(this).apply {
                 text = "Yeniden dene"
                 setTextColor(Ui.ACCENT)
                 textSize = 15f
                 gravity = Gravity.CENTER
                 setPadding(0, Ui.dp(this@PlayerActivity, 12), 0, 0)
                 setOnClickListener {
-                    hideErrorOverlay()
-                    restoreSourceButton()
-                    player?.apply { prepare(); play() }
+                    this@PlayerActivity.overlay.removeAllViews()
+                    addSourceButton()
+                    player?.apply { prepare(); playWhenReady = true }
                 }
             })
         }
     }
 
-    private fun hideErrorOverlay() {
-        // hata kutusunu temizle ama kaynak butonu geri gelsin
-        restoreSourceButton()
-    }
-
-    private fun restoreSourceButton() {
-        if (overlaySlot.childCount == 0 || overlaySlot.getChildAt(0).id == View.NO_ID) {
-            overlaySlot.removeAllViews()
-            overlaySlot.gravity = Gravity.END
-            overlaySlot.addView(TextView(this).apply {
-                text = "⟳ Kaynak değiştir"
-                setTextColor(Ui.ACCENT)
-                textSize = 14f
-                setOnClickListener { pickSource(replay = true) }
-            })
+    override fun onStop() {
+        super.onStop()
+        val p = player
+        if (epUrl.isNotBlank() && p != null) {
+            Store.addHistory(
+                Store.HistoryItem(
+                    title = titleText,
+                    seriesUrl = seriesUrl,
+                    episodeUrl = epUrl,
+                    posterUrl = poster,
+                    positionMs = p.currentPosition,
+                    durationMs = if (p.duration > 0) p.duration else 0,
+                    time = System.currentTimeMillis(),
+                )
+            )
         }
     }
 
