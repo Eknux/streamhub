@@ -214,5 +214,24 @@ object I18n {
         "audio_single" to mapOf(TR to "Tek ses kanalı — dil seçimi yok", EN to "Single audio track — no language selection"),
         "audio_dialog_title" to mapOf(TR to "Ses dili seç", EN to "Choose audio language"),
         "track_unknown" to mapOf(TR to "Parça %s", EN to "Track %s"),
+
+        // ---------- v2.6: bolumler / hiz / otomatik-ileri / pip kontrolleri ----------
+        "episodes_btn" to mapOf(TR to "📺 Bölümler", EN to "📺 Episodes"),
+        "season_title" to mapOf(TR to "Sezon seç", EN to "Choose season"),
+        "episode_title" to mapOf(TR to "Bölüm seç", EN to "Choose episode"),
+        "season_n" to mapOf(TR to "%s. Sezon", EN to "Season %s"),
+        "season_all" to mapOf(TR to "Tüm sezonlar", EN to "All seasons"),
+        "speed_title" to mapOf(TR to "Oynatma hızı", EN to "Playback speed"),
+        "next_episode_toast" to mapOf(TR to "Sonraki bölüm: %s", EN to "Next episode: %s"),
+        "no_next_episode" to mapOf(TR to "Sonraki bölüm yok", EN to "No next episode"),
+        "no_prev_episode" to mapOf(TR to "Önceki bölüm yok", EN to "No previous episode"),
+        "loading_episode" to mapOf(TR to "Bölüm yükleniyor...", EN to "Loading episode..."),
+        "pip_play" to mapOf(TR to "Oynat", EN to "Play"),
+        "pip_pause" to mapOf(TR to "Duraklat", EN to "Pause"),
+        "pip_rewind" to mapOf(TR to "10 sn geri", EN to "Rewind 10 s"),
+        "pip_forward" to mapOf(TR to "10 sn ileri", EN to "Forward 10 s"),
+        "pip_prev_ep" to mapOf(TR to "Önceki bölüm", EN to "Previous episode"),
+        "pip_next_ep" to mapOf(TR to "Sonraki bölüm", EN to "Next episode"),
+        "version_footer" to mapOf(TR to "StreamHub v2.6 — Material You\n github.com/Eknux/streamhub", EN to "StreamHub v2.6 — Material You\n github.com/Eknux/streamhub"),
     )
 }

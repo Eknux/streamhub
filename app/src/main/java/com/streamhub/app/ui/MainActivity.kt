@@ -645,6 +645,11 @@ class MainActivity : AppCompatActivity() {
             contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         val name = uri.lastPathSegment?.substringAfterLast('/') ?: com.streamhub.app.core.I18n.s("local_video")
+        // tek video: seri baglamini temizle (bolum menusu / otomatik-ileri devre disi)
+        StreamSession.episodes = emptyList()
+        StreamSession.currentEpisodeIndex = -1
+        StreamSession.providerName = null
+        StreamSession.seriesTitle = name
         StreamSession.sources = listOf(VideoSource(name = com.streamhub.app.core.I18n.s("local_file_source"), url = uri.toString(), isM3u8 = false))
         startActivity(
             Intent(this, PlayerActivity::class.java)
@@ -659,7 +664,12 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val provider = app.providerByName(providerName)
             val src = provider?.directSource(url)
-                ?: VideoSource(name = "Doğrudan", url = url, isM3u8 = url.contains(".m3u8"))
+                ?: VideoSource(name = com.streamhub.app.core.I18n.s("direct_source"), url = url, isM3u8 = url.contains(".m3u8"))
+            // tek video: seri baglamini temizle (bolum menusu / otomatik-ileri devre disi)
+            StreamSession.episodes = emptyList()
+            StreamSession.currentEpisodeIndex = -1
+            StreamSession.providerName = null
+            StreamSession.seriesTitle = title
             StreamSession.sources = listOf(src)
             startActivity(
                 Intent(this@MainActivity, PlayerActivity::class.java)

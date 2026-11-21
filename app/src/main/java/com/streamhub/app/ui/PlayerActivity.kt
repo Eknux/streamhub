@@ -1,10 +1,17 @@
 package com.streamhub.app.ui
 
 import android.app.PictureInPictureParams
+import android.app.PendingIntent
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -22,6 +29,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
@@ -48,6 +56,15 @@ import kotlinx.coroutines.withContext
 
 class PlayerActivity : AppCompatActivity() {
 
+    companion object {
+        // PiP medya kontrollerinin broadcast aksiyonlari
+        private const val ACTION_PLAY_PAUSE = "com.streamhub.app.pip.PLAY_PAUSE"
+        private const val ACTION_REWIND = "com.streamhub.app.pip.REWIND"
+        private const val ACTION_FORWARD = "com.streamhub.app.pip.FORWARD"
+        private const val ACTION_PREV_EP = "com.streamhub.app.pip.PREV_EP"
+        private const val ACTION_NEXT_EP = "com.streamhub.app.pip.NEXT_EP"
+    }
+
     private var player: ExoPlayer? = null
     private lateinit var playerView: PlayerView
     private lateinit var overlay: LinearLayout
@@ -57,6 +74,11 @@ class PlayerActivity : AppCompatActivity() {
     private var resumed = false
     private var autoRetries = 0
     private lateinit var http: com.streamhub.app.net.Http
+
+    // oynatma hizi (0.5x - 3x); secim kalici kaydedilir
+    private var playbackSpeed = 1.0f
+    private val speedOptions = floatArrayOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
+    private var seriesTitle = ""
 
     // Oynatici ekstra kontrolleri: yon kilidi, tam ekran, PiP
     private var orientationMode = 0 // 0=oto (sensor), 1=dikey, 2=yatay
@@ -114,16 +136,38 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    /** PiP medya kontrollerinden gelen broadcast: oynat/duraklat, sar, bolum degistir. */
+    private val pipReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val p = player ?: return
+            when (intent?.action) {
+                ACTION_PLAY_PAUSE -> if (p.isPlaying) p.pause() else p.play()
+                ACTION_REWIND -> p.seekTo((p.currentPosition - 10_000L).coerceAtLeast(0L))
+                ACTION_FORWARD -> {
+                    val dur = p.duration
+                    val target = p.currentPosition + 10_000L
+                    p.seekTo(if (dur > 0) target.coerceAtMost(dur) else target)
+                }
+                ACTION_PREV_EP -> goToPrevEpisode()
+                ACTION_NEXT_EP -> goToNextEpisode()
+            }
+            if (inPip) updatePipParams()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         http = com.streamhub.app.net.Http(this)
 
         titleText = intent.getStringExtra("title") ?: "StreamHub"
+        seriesTitle = intent.getStringExtra("seriesTitle")
+            ?: intent.getStringExtra("title")?.substringBefore(" —") ?: ""
         startMs = intent.getLongExtra("startMs", 0L)
         seriesUrl = intent.getStringExtra("seriesUrl")
         epUrl = intent.getStringExtra("episodeUrl") ?: intent.getStringExtra("uri").orEmpty()
         poster = intent.getStringExtra("poster")
         loadSubPrefs()
+        playbackSpeed = getSharedPreferences("streamhub_prefs", MODE_PRIVATE).getFloat("play_speed", 1.0f)
 
         frame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
 
@@ -173,6 +217,17 @@ class PlayerActivity : AppCompatActivity() {
         subtitlePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             uri?.let { loadExternalSubtitle(it) }
         }
+
+        // PiP medya kontrol broadcastlari icin alici
+        ContextCompat.registerReceiver(this, pipReceiver,
+            IntentFilter().apply {
+                addAction(ACTION_PLAY_PAUSE)
+                addAction(ACTION_REWIND)
+                addAction(ACTION_FORWARD)
+                addAction(ACTION_PREV_EP)
+                addAction(ACTION_NEXT_EP)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED)
 
         if (StreamSession.sources.isEmpty() && epUrl.isNotBlank()) {
             StreamSession.sources = listOf(
@@ -224,10 +279,20 @@ class PlayerActivity : AppCompatActivity() {
 
         val row3 = row()
         row3.addView(controlButton(I18n.s("subtitles_btn"), false) { showSubtitleSettings() })
+        row3.addView(controlButton("⚡ ${playbackSpeed}x", false) { showPlaybackSpeed() })
         if (hasMultiAudio()) {
             row3.addView(controlButton(I18n.s("audio_lang_btn"), false) { pickAudioLanguage() })
         }
         overlay.addView(row3)
+
+        // seri ise: bolum menusu + hizli sonraki/onceki bolum
+        if (StreamSession.episodes.isNotEmpty()) {
+            val row4 = row()
+            row4.addView(controlButton("⏮", false) { goToPrevEpisode() })
+            row4.addView(controlButton("⏭", false) { goToNextEpisode() })
+            row4.addView(controlButton(I18n.s("episodes_btn"), false) { showEpisodesDialog() })
+            overlay.addView(row4)
+        }
     }
 
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -290,10 +355,52 @@ class PlayerActivity : AppCompatActivity() {
         }
         val p = player ?: return
         try {
-            enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(pipRatio(p)).build())
+            enterPictureInPictureMode(PictureInPictureParams.Builder()
+                .setAspectRatio(pipRatio(p))
+                .setActions(pipActions())
+                .build())
         } catch (e: Exception) {
             Ui.toast(this, I18n.f("pip_failed", e.message ?: ""))
         }
+    }
+
+    /** PiP icinde durum degistince (oynat/duraklat, bolum gecisi) parametreleri tazele. */
+    private fun updatePipParams() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val p = player ?: return
+        runCatching {
+            setPictureInPictureParams(PictureInPictureParams.Builder()
+                .setAspectRatio(pipRatio(p))
+                .setActions(pipActions())
+                .build())
+        }
+    }
+
+    /** PiP medya kontrolleri: telefonlarda 3 buton gorunur — adaptif yerlesim:
+     *  [onceki bolum | 10 sn geri]  [oynat/duraklat]  [sonraki bolum | 10 sn ileri] */
+    private fun pipActions(): List<RemoteAction> {
+        val hasPrev = hasPrevEpisode()
+        val hasNext = hasNextEpisode()
+        val playing = player?.isPlaying == true
+
+        fun action(icon: Int, title: String, reqCode: Int, act: String) = RemoteAction(
+            Icon.createWithResource(this@PlayerActivity, icon),
+            title,
+            title,
+            PendingIntent.getBroadcast(this@PlayerActivity, reqCode,
+                Intent(act).setPackage(packageName),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+
+        return listOf(
+            action(if (hasPrev) R.drawable.ic_prev else R.drawable.ic_rewind,
+                I18n.s(if (hasPrev) "pip_prev_ep" else "pip_rewind"), 1,
+                if (hasPrev) ACTION_PREV_EP else ACTION_REWIND),
+            action(if (playing) R.drawable.ic_pause else R.drawable.ic_play,
+                I18n.s(if (playing) "pip_pause" else "pip_play"), 2, ACTION_PLAY_PAUSE),
+            action(if (hasNext) R.drawable.ic_next else R.drawable.ic_ff,
+                I18n.s(if (hasNext) "pip_next_ep" else "pip_forward"), 3,
+                if (hasNext) ACTION_NEXT_EP else ACTION_FORWARD),
+        )
     }
 
     /** Video gercek boyutundan PiP orani hesaplar; Android'in [0.418, 2.39] sinirina kirpar. */
@@ -314,6 +421,173 @@ class PlayerActivity : AppCompatActivity() {
                 g.type == C.TRACK_TYPE_AUDIO && g.length > 0
             } > 1
         }.getOrDefault(false)
+    }
+
+    // ==================== OYNATMA HIZI ====================
+
+    /** 0.5x - 3x arasi oynatma hizi; secim kalici kaydedilir ve tum bolumlerde korunur. */
+    private fun showPlaybackSpeed() {
+        val labels = speedOptions.map { "${it}x" }.toTypedArray()
+        val checked = speedOptions.indexOfFirst { it == playbackSpeed }
+        AlertDialog.Builder(this)
+            .setTitle(I18n.s("speed_title"))
+            .setSingleChoiceItems(labels, checked) { d, which ->
+                playbackSpeed = speedOptions[which]
+                player?.let { p ->
+                    p.setPlaybackParameters(p.playbackParameters.buildUpon().setSpeed(playbackSpeed).build())
+                }
+                getSharedPreferences("streamhub_prefs", MODE_PRIVATE).edit()
+                    .putFloat("play_speed", playbackSpeed).apply()
+                addControls()
+                d.dismiss()
+            }
+            .setNegativeButton(I18n.s("cancel"), null)
+            .show()
+    }
+
+    // ==================== BOLUMLER: SEZON/BOLUM SECIMI ====================
+
+    /** Bolum etiketi: "S1 · B3 — Baslik" (bolum listelerinde kullanilir). */
+    private fun episodeLabel(ep: com.streamhub.app.core.Episode): String = buildString {
+        if (ep.season != null && ep.number != null) append("S${ep.season} · ")
+        if (ep.number != null) append(I18n.f("episode_n", "${ep.number}"))
+        ep.title?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" — "); append(it) }
+        if (isEmpty()) append(ep.url.substringAfterLast('/'))
+    }
+
+    private fun hasPrevEpisode(): Boolean = StreamSession.currentEpisodeIndex > 0
+
+    private fun hasNextEpisode(): Boolean =
+        StreamSession.currentEpisodeIndex in 0 until StreamSession.episodes.size - 1
+
+    private fun goToPrevEpisode() {
+        if (!hasPrevEpisode()) { Ui.toast(this, I18n.s("no_prev_episode")); return }
+        switchEpisode(StreamSession.currentEpisodeIndex - 1)
+    }
+
+    private fun goToNextEpisode() {
+        if (!hasNextEpisode()) { Ui.toast(this, I18n.s("no_next_episode")); return }
+        switchEpisode(StreamSession.currentEpisodeIndex + 1)
+    }
+
+    /** Bolum menusu: sezon verisi varsa once sezon, sonra o sezonun bolum listesi. */
+    private fun showEpisodesDialog() {
+        val eps = StreamSession.episodes
+        if (eps.isEmpty()) return
+        val seasons = eps.mapNotNull { it.season }.distinct().sorted()
+        if (seasons.size > 1) {
+            val labels = seasons.map { I18n.f("season_n", "$it") }.toTypedArray()
+            AlertDialog.Builder(this)
+                .setTitle(I18n.s("season_title"))
+                .setItems(labels) { _, which ->
+                    showEpisodeListDialog(eps.filter { it.season == seasons[which] })
+                }
+                .setNegativeButton(I18n.s("cancel"), null)
+                .show()
+        } else {
+            showEpisodeListDialog(eps)
+        }
+    }
+
+    private fun showEpisodeListDialog(list: List<com.streamhub.app.core.Episode>) {
+        val cur = StreamSession.episodes.getOrNull(StreamSession.currentEpisodeIndex)
+        val labels = list.map {
+            val l = episodeLabel(it)
+            if (cur != null && it.url == cur.url) "● $l" else l
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle(I18n.s("episode_title"))
+            .setItems(labels) { _, which ->
+                val ep = list[which]
+                val idx = StreamSession.episodes.indexOfFirst { it.url == ep.url }
+                if (idx >= 0 && idx != StreamSession.currentEpisodeIndex) switchEpisode(idx)
+            }
+            .setNegativeButton(I18n.s("cancel"), null)
+            .show()
+    }
+
+    // ==================== BOLUM GECISI VE OTOMATIK-ILERI ====================
+
+    private fun saveHistoryNow(pos: Long) {
+        if (epUrl.isBlank()) return
+        val p = player
+        Store.addHistory(
+            Store.HistoryItem(
+                title = titleText,
+                seriesUrl = seriesUrl,
+                episodeUrl = epUrl,
+                posterUrl = poster,
+                positionMs = pos,
+                durationMs = p?.duration?.takeIf { it > 0 } ?: 0,
+                time = System.currentTimeMillis(),
+            )
+        )
+    }
+
+    /** Verilen bolume gecer: once konumu gecmise kaydeder, linkleri cozer, oynatir. */
+    private fun switchEpisode(index: Int) {
+        val ep = StreamSession.episodes.getOrNull(index) ?: return
+        saveHistoryNow(player?.currentPosition ?: 0L)
+
+        val provider = (application as com.streamhub.app.App).providerByName(StreamSession.providerName)
+        if (provider == null) {
+            Ui.toast(this, I18n.s("plugin_not_found"))
+            return
+        }
+
+        StreamSession.currentEpisodeIndex = index
+        val epTitle = ep.title?.takeIf { it.isNotBlank() } ?: I18n.f("episode_n", "${ep.number ?: index + 1}")
+        val base = seriesTitle.ifBlank { StreamSession.seriesTitle }
+        titleText = "$base — $epTitle"
+        epUrl = ep.url
+        startMs = Store.positionFor(ep.url)
+        resumed = false
+        // eski harici altyazi yeni bolume uymaz; gomulu altyazi tekrar acilir
+        externalSubs = null
+        externalSubName = ""
+        embeddedBuffer.clear()
+        player?.trackSelectionParameters = player?.trackSelectionParameters?.buildUpon()
+            ?.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)?.build()
+
+        if (inPip) updatePipParams()
+
+        // linkler cozulene kadar yukleniyor durumu
+        runOnUiThread {
+            showingControls = false
+            overlay.visibility = View.VISIBLE
+            overlayAsCentered()
+            overlay.removeAllViews()
+            overlay.gravity = Gravity.CENTER
+            overlay.addView(TextView(this).apply {
+                text = I18n.s("loading_episode")
+                setTextColor(Ui.ACCENT)
+                textSize = 15f
+                gravity = Gravity.CENTER
+            })
+        }
+
+        lifecycleScope.launch {
+            val sources = runCatching { provider.loadLinks(ep.url) }.getOrDefault(emptyList())
+            if (sources.isEmpty()) {
+                Ui.toast(this@PlayerActivity, I18n.s("no_video_source"))
+                return@launch
+            }
+            StreamSession.sources = sources
+            lastSourceIndex = 0
+            play(0)
+        }
+    }
+
+    /** Video bitti: varsa otomatik olarak sonraki bolume gecer (Cs tarzi); yoksa video sonlanir. */
+    private fun onEpisodeEnded() {
+        val p = player ?: return
+        saveHistoryNow(if (p.duration > 0) p.duration else p.currentPosition)
+        if (hasNextEpisode()) {
+            val next = StreamSession.episodes[StreamSession.currentEpisodeIndex + 1]
+            Ui.toast(this, I18n.f("next_episode_toast", episodeLabel(next)))
+            switchEpisode(StreamSession.currentEpisodeIndex + 1)
+        }
+        // sonraki bolum yok: video burada biter, hicbir sey yapma
     }
 
     // ==================== SES DILI SECIMI ====================
@@ -697,6 +971,8 @@ class PlayerActivity : AppCompatActivity() {
                 .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
                 .build().also { p ->
                     playerView.player = p
+                    // kayitli hiz uygulanir (tum kaynak/bolum gecislerinde korunur)
+                    p.setPlaybackParameters(p.playbackParameters.buildUpon().setSpeed(playbackSpeed).build())
                     p.addListener(object : Player.Listener {
                         override fun onCues(cueGroup: CueGroup) {
                             if (externalSubs == null) bufferEmbedded(cueGroup)
@@ -706,6 +982,13 @@ class PlayerActivity : AppCompatActivity() {
                                 p.seekTo(startMs)
                                 resumed = true
                             }
+                            // video bitti: otomatik sonraki bolum (varsa)
+                            if (state == Player.STATE_ENDED) onEpisodeEnded()
+                        }
+                        override fun onIsPlayingChanged(isPlaying: Boolean) {
+                            // PiP oynat/duraklat dugmesi guncel kalsin
+                            if (inPip) updatePipParams()
+                        }
                         }
                         override fun onPlayerError(error: PlaybackException) {
                             val code = httpStatusCode(error)
@@ -885,23 +1168,12 @@ class PlayerActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         val p = player
-        if (epUrl.isNotBlank() && p != null) {
-            Store.addHistory(
-                Store.HistoryItem(
-                    title = titleText,
-                    seriesUrl = seriesUrl,
-                    episodeUrl = epUrl,
-                    posterUrl = poster,
-                    positionMs = p.currentPosition,
-                    durationMs = if (p.duration > 0) p.duration else 0,
-                    time = System.currentTimeMillis(),
-                )
-            )
-        }
+        if (epUrl.isNotBlank() && p != null) saveHistoryNow(p.currentPosition)
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        runCatching { unregisterReceiver(pipReceiver) }
         subHandler.removeCallbacks(subTick)
         playerView.player = null
         player?.release()

@@ -177,7 +177,13 @@ object Ui {
     }
 }
 
-/** Oynaticiya gecirilen aktif kaynaklar (ayni process icerisinde paylasilir). */
+/** Oynaticiya gecirilen aktif kaynaklar (ayni process icerisinde paylasilir).
+ *  Bolum listesi: seri izlerken oynatici sonraki/onceki bolume gecmek ve
+ *  sezon/bolum menusunu gostermek icin bunu kullanir (Cs tarzi otomatik-ileri). */
 object StreamSession {
     var sources: List<com.streamhub.app.core.VideoSource> = emptyList()
+    var episodes: List<com.streamhub.app.core.Episode> = emptyList()
+    var currentEpisodeIndex: Int = -1
+    var providerName: String? = null
+    var seriesTitle: String = ""
 }

@@ -164,11 +164,19 @@ class DetailActivity : AppCompatActivity() {
                 if (sources.isEmpty()) {
                     Ui.toast(this@DetailActivity, com.streamhub.app.core.I18n.s("no_video_source"))
                 } else {
+                    // oynatici icin seri baglamini oturuma tasi: bolum menusu +
+                    // sonraki/onceki bolum + otomatik-ileri buradan calisir
+                    val eps = info?.episodes ?: listOf(ep)
+                    StreamSession.episodes = eps
+                    StreamSession.currentEpisodeIndex = eps.indexOfFirst { it.url == ep.url }
+                    StreamSession.providerName = provider.name
+                    StreamSession.seriesTitle = seriesTitle
                     StreamSession.sources = sources
                     val epTitle = ep.title ?: com.streamhub.app.core.I18n.f("episode_n", "${ep.number ?: 1}")
                     startActivity(
                         Intent(this@DetailActivity, PlayerActivity::class.java)
                             .putExtra("title", "$seriesTitle — $epTitle")
+                            .putExtra("seriesTitle", seriesTitle)
                             .putExtra("seriesUrl", url)
                             .putExtra("episodeUrl", ep.url)
                             .putExtra("poster", posterUrl)

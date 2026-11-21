@@ -4,17 +4,20 @@ Plugin-based Android video player with Material 3 / Material You UI. **It hosts 
 
 > **⚠️ Legal Disclaimer:** StreamHub does not host, store, upload or distribute any video/movie/series file. The app is only a player + plugin platform; the user loads content from third-party sites through plugins and bears all responsibility. Full text: [DISCLAIMER.md](DISCLAIMER.md). The app shows this notice as a mandatory dialog on first launch; if you decline, it closes.
 
-## Features (v2.5)
+## Features (v2.6)
 
 - **🔌 Compile-free plugin system** — `plugin.json` inside a zip; static video list or site scraping with CSS selectors; add/remove in-app
 - **🧩 Built-in resolvers** — NP_CONFIG (m3u8 + SHA-256 proof-of-work gate + subtitles), the ContentX iframe family, in-page m3u8/mp4 regexes — plugins use them automatically
 - **🎬 ExoPlayer (Media3)** — HLS + MP4 + local files (content://), source/quality picker, subtitle support, **resume where you left off**
-- **📺 Picture-in-Picture (PiP)** — keep watching in a floating window when you press Home (Android 8+); the real video aspect ratio is preserved
+- **📺 Picture-in-Picture (PiP) with media controls** — keep watching in a floating window when you press Home (Android 8+); play/pause, ±10 s seek or **previous/next episode** right inside the PiP window; real video aspect ratio preserved
+- **⏭ Auto-next episode** — when an episode ends, the next one starts automatically (plugin resolves its links, watch position is saved); if there is no next episode the player simply stops
+- **📺 Episode & season menu** — series get a "Bölümler / Episodes" section in the player settings: pick a season, then an episode, and it plays instantly; quick ⏮ / ⏭ buttons too
+- **⚡ Playback speed** — 0.5x to 3x, persisted across episodes and restarts
 - **⛶ Fullscreen** — system bars hide automatically in landscape (immersive); one-tap toggle
 - **🔄 Orientation lock** — Auto / Portrait / Landscape from the player
 - **💬 Subtitles, done right** — plain text (no background box), fully customizable: **size, color, position, delay and font**; **external .srt/.vtt import** with exact delay in both directions; embedded track selection for multi-language videos
 - **🔊 Audio language** — pick the audio track when a video has more than one
-- **⚙️ In-player settings panel** — tap the video and the panel pops up bottom-right: fullscreen, PiP, orientation, sources, subtitles, audio language
+- **⚙️ In-player settings panel** — tap the video and the panel pops up bottom-right: fullscreen, PiP, orientation, sources, subtitles, speed, audio language, episodes
 - **🌐 App language** — Turkish / English, chosen right after the first-launch legal notice (also changeable in Settings)
 - **⭐ Favorites & 🕒 Watch history** — stored on-device
 - **▶ Play from URL & 📁 local file playback** — the player works even without a plugin
