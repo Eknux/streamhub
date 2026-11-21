@@ -7,10 +7,12 @@
     <application
         android:name=".App"
         android:label="StreamHub"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.StreamHub"
         android:usesCleartextTraffic="true"
         android:allowBackup="true"
+        android:largeHeap="true"
         android:hardwareAccelerated="true">
 
         <activity

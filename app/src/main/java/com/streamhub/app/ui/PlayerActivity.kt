@@ -120,7 +120,10 @@ class PlayerActivity : AppCompatActivity() {
         val dataSourceFactory = DefaultDataSource.Factory(this, httpFactory)
 
         if (player == null) {
-            player = ExoPlayer.Builder(this)
+            // Mali/Adreno GPU'larinda codec uyumsuzlugunda alternatif decoder'a gecer
+            val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(this)
+                .setEnableDecoderFallback(true)
+            player = ExoPlayer.Builder(this, renderersFactory)
                 .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
                 .build().also { p ->
                     playerView.player = p

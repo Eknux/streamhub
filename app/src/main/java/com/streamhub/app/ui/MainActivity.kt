@@ -1,19 +1,25 @@
 package com.streamhub.app.ui
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -23,7 +29,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.snackbar.Snackbar
@@ -32,6 +37,7 @@ import com.google.android.material.textfield.TextInputLayout
 import com.google.android.material.appbar.MaterialToolbar
 import com.streamhub.app.App
 import com.streamhub.app.R
+import com.streamhub.app.core.CrashHandler
 import com.streamhub.app.core.Provider
 import com.streamhub.app.core.SearchResult
 import com.streamhub.app.core.Store
@@ -57,18 +63,42 @@ class MainActivity : AppCompatActivity() {
     private lateinit var pageSettings: LinearLayout
     private lateinit var prefs: android.content.SharedPreferences
 
-    private val pluginPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { importPlugin(it) }
-    }
-    private val videoPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { playLocalFile(it) }
-    }
+    private var pluginPicker: ActivityResultLauncher<Array<String>>? = null
+    private var videoPicker: ActivityResultLauncher<Array<String>>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         app = application as App
         prefs = getSharedPreferences("streamhub_prefs", MODE_PRIVATE)
 
+        // launcher'lar onCreate icinde kurulur (baslatma sirasi riski olmasin)
+        pluginPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            uri?.let { importPlugin(it) }
+        }
+        videoPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            uri?.let { playLocalFile(it) }
+        }
+
+        try {
+            buildFullUi()
+        } catch (t: Throwable) {
+            // Material arayuz her ne sebeple olursa bozulsa: uygulama YINE acilir
+            // ve hatanin kendisi ekranda gosterilir ("direk cokuyor" degil).
+            CrashHandler.record(t)
+            runCatching { setContentView(buildFallbackUi(t)) }
+            runCatching { Ui.toast(this, "Arayüz kurulamadı — hata ekranda gösterildi") }
+        }
+        runCatching { maybeShowCrashReport() }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        CrashHandler.appStarted = true
+    }
+
+    // ---------- tam arayuz ----------
+
+    private fun buildFullUi() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.BG) }
 
         val toolbar = MaterialToolbar(this).apply {
@@ -95,7 +125,7 @@ class MainActivity : AppCompatActivity() {
             pageSettings.visibility = View.GONE })
         root.addView(contentFrame, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        val nav = BottomNavigationView(this)
+        val nav = BottomNavigationView(this).apply { id = R.id.bottom_nav }
         nav.menu.add(Menu.NONE, PAGE_HOME, Menu.NONE, "Ana").setIcon(R.drawable.ic_home)
         nav.menu.add(Menu.NONE, PAGE_SEARCH, Menu.NONE, "Arama").setIcon(R.drawable.ic_search)
         nav.menu.add(Menu.NONE, PAGE_FAVS, Menu.NONE, "Favoriler").setIcon(R.drawable.ic_fav)
@@ -109,9 +139,77 @@ class MainActivity : AppCompatActivity() {
         setContentView(root)
 
         if (!prefs.getBoolean("disclaimer_accepted", false)) {
-            showDisclaimerDialog(firstLaunch = true)
+            runCatching { showDisclaimerDialog(firstLaunch = true) }
         }
         showPage(PAGE_HOME)
+    }
+
+    // ---------- guvenli geri dusme ekrani ----------
+
+    private fun buildFallbackUi(t: Throwable): View {
+        val ctx = this
+        fun dp(v: Int) = Ui.dp(ctx, v)
+        val root = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xFF101318.toInt())
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+        }
+        root.addView(TextView(ctx).apply {
+            text = "StreamHub başlatılamadı"
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 18f
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        root.addView(TextView(ctx).apply {
+            text = "Arayüz kurulamadı. Aşağıdaki hatayı ekrandan seçip kopyala ve geliştiriciye gönder:"
+            setTextColor(0xFF9aa3b5.toInt())
+            textSize = 13f
+            setPadding(0, dp(8), 0, dp(8))
+        })
+        val scroll = ScrollView(ctx)
+        scroll.addView(TextView(ctx).apply {
+            text = t.toString() + "\n\n" + t.stackTrace.joinToString("\n") { it.toString() }
+            setTextColor(0xFFe6e9f2.toInt())
+            textSize = 12f
+            setTypeface(Typeface.MONOSPACE)
+            setTextIsSelectable(true)
+        })
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(TextView(ctx).apply {
+            text = "📋 Hatayı Kopyala"
+            setTextColor(0xFF8b9dff.toInt())
+            textSize = 15f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(12), 0, 0)
+            setOnClickListener {
+                val full = t.toString() + "\n" + t.stackTrace.joinToString("\n") { it.toString() }
+                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("streamhub_error", full))
+                Ui.toast(ctx, "Kopyalandı")
+            }
+        })
+        return root
+    }
+
+    /** Gecmis cokme kaydi varsa acilista raporla (kullanici ekran goruntusu alip gonderebilir). */
+    private fun maybeShowCrashReport() {
+        val crash = CrashHandler.lastCrash(this) ?: return
+        val stamp = CrashHandler.crashStamp(this)
+        if (prefs.getLong("crash_shown_at", -1L) == stamp) return
+        val mark = { prefs.edit().putLong("crash_shown_at", stamp).apply() }
+        // framework diyaloğu: AppCompat/M3 bozulsa bile calisir
+        android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Son çökme kaydı")
+            .setMessage(crash.take(3500))
+            .setPositiveButton("📋 Kopyala") { _, _ ->
+                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("streamhub_crash", crash))
+                mark()
+            }
+            .setNeutralButton("🗑 Sil") { _, _ -> CrashHandler.clear(this); mark() }
+            .setNegativeButton("Kapat") { _, _ -> mark() }
+            .show()
     }
 
     // ---------- sayfa gecisi ----------
@@ -128,8 +226,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun scrollWrap(view: View): android.widget.ScrollView {
-        val sv = android.widget.ScrollView(this)
+    private fun scrollWrap(view: View): ScrollView {
+        val sv = ScrollView(this)
         sv.addView(view, ViewGroup.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
         return sv
     }
@@ -186,7 +284,7 @@ class MainActivity : AppCompatActivity() {
         actions.addView(MaterialButton(ctx).apply {
             text = "⟳ Yerel Dosya"
             setPadding(Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12), 0)
-            setOnClickListener { videoPicker.launch(arrayOf("video/*")) }
+            setOnClickListener { videoPicker?.launch(arrayOf("video/*")) }
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(4, 0, 4, 0) })
         col.addView(actions, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
 
@@ -280,7 +378,7 @@ class MainActivity : AppCompatActivity() {
         })
         inner.addView(MaterialButton(ctx).apply {
             text = "＋ Eklenti Ekle (.zip)"
-            setOnClickListener { pluginPicker.launch(arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed")) }
+            setOnClickListener { pluginPicker?.launch(arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed")) }
         }, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 0, 0, Ui.dp(ctx, 10)) })
         inner.addView(MaterialButton(ctx).apply {
             text = "📖 Eklenti Yapımı (GitHub)"
@@ -400,7 +498,6 @@ class MainActivity : AppCompatActivity() {
 
     // ---------- AYARLAR ----------
 
-    @SuppressLint("SetTextI18n")
     private fun buildSettingsPage(): LinearLayout {
         val page = LinearLayout(this)
         page.orientation = LinearLayout.VERTICAL
@@ -429,7 +526,7 @@ class MainActivity : AppCompatActivity() {
             col.addView(Ui.divider(ctx))
         }
         col.addView(iconRow(R.drawable.ic_add, "Eklenti Ekle (.zip)") {
-            pluginPicker.launch(arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed"))
+            pluginPicker?.launch(arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed"))
         })
         col.addView(iconRow(R.drawable.ic_book, "Eklenti Yapımı Rehberi (GitHub)") { openUrl(PLUGINS_DOC_URL) })
         col.addView(Ui.divider(ctx))
@@ -445,23 +542,23 @@ class MainActivity : AppCompatActivity() {
 
         col.addView(Ui.sectionTitle(ctx, "Hakkında"))
         col.addView(iconRow(R.drawable.ic_fav, "⚖ Yasal Uyarı") { showDisclaimerDialog(false) })
-        val crash = com.streamhub.app.core.CrashHandler.lastCrash(ctx)
+        val crash = CrashHandler.lastCrash(ctx)
         if (crash != null) {
             col.addView(iconRow(R.drawable.ic_bug, "🐞 Son Çökme Kaydı") {
                 AlertDialog.Builder(this@MainActivity)
                     .setTitle("Son çökme kaydı")
                     .setMessage(crash.take(3000))
                     .setPositiveButton("Kopyala") { _, _ ->
-                        (getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
-                            .setPrimaryClip(android.content.ClipData.newPlainText("crash", crash))
+                        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                            .setPrimaryClip(ClipData.newPlainText("crash", crash))
                         snack("Kopyalandı")
                     }
-                    .setNeutralButton("Sil") { _, _ -> com.streamhub.app.core.CrashHandler.clear(ctx); refreshSettings() }
+                    .setNeutralButton("Sil") { _, _ -> CrashHandler.clear(ctx); refreshSettings() }
                     .setNegativeButton("Kapat", null)
                     .show()
             })
         }
-        col.addView(listSubtitle("StreamHub v2.0\n github.com/Eknux/streamhub"))
+        col.addView(listSubtitle("StreamHub v2.1\n github.com/Eknux/streamhub"))
 
         pageSettings.addView(col)
     }
@@ -633,7 +730,7 @@ Devam ederek bu şartları kabul etmiş olursunuz."""
         when {
             pageSearch.visibility == View.VISIBLE || pageFavs.visibility == View.VISIBLE ||
                 pageSettings.visibility == View.VISIBLE -> {
-                nav.selectedItemId = PAGE_HOME
+                nav?.selectedItemId = PAGE_HOME
             }
             else -> super.onBackPressed()
         }

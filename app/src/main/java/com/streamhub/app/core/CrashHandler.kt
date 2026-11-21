@@ -1,19 +1,22 @@
 package com.streamhub.app.core
 
 import android.content.Context
+import android.content.Intent
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
- * Her olasi cokmeyi dosyaya yazar; kullanici Ayarlar -> "Son cokme kaydi"ndan
- * hatayi gorur ve rapor edebilir. (Cokme gormezden gelinmez: once kayit, sonra
- * varsayilan davranis.)
+ * CloudStream tarzi cokme yoneticisi:
+ *  - cokme dosyaya yazilir (ilk satir = zaman damgasi, sonrasi = stack trace)
+ *  - uygulama daha once acilmissa (appStarted) otomatik yeniden baslatilir
+ *  - startup'ta cokerse yeniden baslatma YAPMAZ (sonsuz dongu olmasin);
+ *    MainActivity acilista kaydi diyalogla ekranda gosterir.
  */
 object CrashHandler : Thread.UncaughtExceptionHandler {
+
+    @Volatile
+    var appStarted = false
 
     private var appContext: Context? = null
     private var previous: Thread.UncaughtExceptionHandler? = null
@@ -25,13 +28,41 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
     }
 
     override fun uncaughtException(thread: Thread, throwable: Throwable) {
+        record(throwable, thread)
+        val prev = previous
+        if (appStarted) {
+            if (prev != null) prev.uncaughtException(thread, throwable)
+            else restartApp()
+        } else {
+            if (prev != null) prev.uncaughtException(thread, throwable)
+            else kotlin.system.exitProcess(2)
+        }
+    }
+
+    private fun restartApp() {
+        val ctx = appContext
+        val launch = ctx?.packageManager?.getLaunchIntentForPackage(ctx.packageName)
+        if (ctx != null && launch != null) {
+            runCatching { ctx.startActivity(Intent.makeRestartActivityTask(launch.component)) }
+        }
+        kotlin.system.exitProcess(2)
+    }
+
+    /** Koddan da cagrilabilir: hatayi dosyaya kaydeder. */
+    fun record(throwable: Throwable, thread: Thread = Thread.currentThread()) {
         runCatching {
             val ctx = appContext ?: return
             val trace = StringWriter().also { throwable.printStackTrace(PrintWriter(it)) }.toString()
-            val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
-            File(ctx.filesDir, "last_crash.txt").writeText("$stamp · ${thread.name}\n\n$trace")
+            val stamp = System.currentTimeMillis()
+            File(ctx.filesDir, "last_crash.txt").writeText("$stamp\n$trace")
         }
-        previous?.uncaughtException(thread, throwable) ?: kotlin.system.exitProcess(2)
+    }
+
+    fun crashStamp(context: Context): Long {
+        val f = File(context.filesDir, "last_crash.txt")
+        if (!f.exists()) return -1L
+        // eski formatli (v2.0) dosya da raporlansin diye 0 doner
+        return f.readLines().firstOrNull()?.toLongOrNull() ?: 0L
     }
 
     fun lastCrash(context: Context): String? =

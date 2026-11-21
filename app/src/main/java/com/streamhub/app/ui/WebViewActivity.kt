@@ -25,7 +25,7 @@ class WebViewActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val target = intent.getStringExtra("url") ?: "https://dizilla.la/"
+        val target = intent.getStringExtra("url") ?: run { finish(); return }
         val app = application as App
 
         val root = LinearLayout(this).apply {

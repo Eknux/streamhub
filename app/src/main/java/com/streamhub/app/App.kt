@@ -1,9 +1,11 @@
 package com.streamhub.app
 
 import android.app.Application
+import android.content.Context
 import com.streamhub.app.core.CrashHandler
 import com.streamhub.app.core.PluginManager
 import com.streamhub.app.core.Provider
+import com.streamhub.app.core.Store
 import com.streamhub.app.net.Http
 
 class App : Application() {
@@ -24,13 +26,19 @@ class App : Application() {
                 .putString("active_plugin", value).apply()
         }
 
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
+        // mumkun olan en erken noktada kur — her cokme kayda girsin
+        runCatching { CrashHandler.install(this) }
+    }
+
     override fun onCreate() {
         super.onCreate()
-        // Her olasi cokme kaydedilir; Ayarlar -> "Son cokme kaydi"ndan gorunur.
         CrashHandler.install(this)
-        com.streamhub.app.core.Store.init(this)
+        runCatching { Store.init(this) }
         http = Http(this)
-        reloadPlugins()
+        // eklenti klasoru/zip hatalari uygulamayi asla kapatmamali
+        runCatching { reloadPlugins() }.onFailure { CrashHandler.record(it) }
     }
 
     fun providerByName(name: String?): Provider? =
