@@ -47,6 +47,7 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.streamhub.app.R
 import com.streamhub.app.core.I18n
 import com.streamhub.app.core.Store
 import com.streamhub.app.core.VideoSource
@@ -434,7 +435,7 @@ class PlayerActivity : AppCompatActivity() {
             .setSingleChoiceItems(labels, checked) { d, which ->
                 playbackSpeed = speedOptions[which]
                 player?.let { p ->
-                    p.setPlaybackParameters(p.playbackParameters.buildUpon().setSpeed(playbackSpeed).build())
+                    p.setPlaybackParameters(p.playbackParameters.withSpeed(playbackSpeed))
                 }
                 getSharedPreferences("streamhub_prefs", MODE_PRIVATE).edit()
                     .putFloat("play_speed", playbackSpeed).apply()
@@ -546,8 +547,10 @@ class PlayerActivity : AppCompatActivity() {
         externalSubs = null
         externalSubName = ""
         embeddedBuffer.clear()
-        player?.trackSelectionParameters = player?.trackSelectionParameters?.buildUpon()
-            ?.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)?.build()
+        player?.let { p ->
+            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
+        }
 
         if (inPip) updatePipParams()
 
@@ -972,7 +975,7 @@ class PlayerActivity : AppCompatActivity() {
                 .build().also { p ->
                     playerView.player = p
                     // kayitli hiz uygulanir (tum kaynak/bolum gecislerinde korunur)
-                    p.setPlaybackParameters(p.playbackParameters.buildUpon().setSpeed(playbackSpeed).build())
+                    p.setPlaybackParameters(p.playbackParameters.withSpeed(playbackSpeed))
                     p.addListener(object : Player.Listener {
                         override fun onCues(cueGroup: CueGroup) {
                             if (externalSubs == null) bufferEmbedded(cueGroup)
@@ -988,7 +991,6 @@ class PlayerActivity : AppCompatActivity() {
                         override fun onIsPlayingChanged(isPlaying: Boolean) {
                             // PiP oynat/duraklat dugmesi guncel kalsin
                             if (inPip) updatePipParams()
-                        }
                         }
                         override fun onPlayerError(error: PlaybackException) {
                             val code = httpStatusCode(error)
